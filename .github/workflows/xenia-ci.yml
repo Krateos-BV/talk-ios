@@ -1,0 +1,65 @@
+# XeniaCloud CI — unsigned build verification for the xenia-rebrand fork.
+# XNT-50. Build-only (no test matrix, no signing) — deliberately narrower than
+# upstream's talk-ios-tests.yml, which also runs a 5-config server test matrix.
+
+name: Xenia CI (unsigned build)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  WORKSPACE: NextcloudTalk.xcworkspace
+  SCHEME: NextcloudTalk
+  XCODE_VERSION: "26.5"
+
+jobs:
+  build:
+    name: Build (unsigned)
+    runs-on: macos-26
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+        submodules: true
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
+
+    - name: Setup Cocoapods
+      uses: maxim-lobanov/setup-cocoapods@8e97e1e98e6ccf42564fdf5622c8feec74199377 # v1.4.0
+      with:
+        version: latest
+
+    - name: Install pods
+      run: pod install
+
+    - name: Setup Xcode ${{ env.XCODE_VERSION }}
+      uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+      with:
+        xcode-version: ${{ env.XCODE_VERSION }}
+
+    - name: Build (unsigned, simulator SDK)
+      run: |
+        set -o pipefail && \
+        xcodebuild build \
+        -workspace "${{ env.WORKSPACE }}" \
+        -scheme "${{ env.SCHEME }}" \
+        -destination 'generic/platform=iOS Simulator' \
+        -derivedDataPath 'DerivedData' \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGN_IDENTITY="" \
+        | xcbeautify --quieter
