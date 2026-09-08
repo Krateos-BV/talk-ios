@@ -124,7 +124,7 @@
                 </stackView>
             </subviews>
             <viewLayoutGuide key="safeArea" id="f6v-tp-8eE"/>
-            <color key="backgroundColor" red="0.0" green="0.50980392159999999" blue="0.78823529410000004" alpha="1" colorSpace="calibratedRGB"/>
+            <color key="backgroundColor" red="0.0" green="0.20000000000000001" blue="0.60000000000000009" alpha="1" colorSpace="calibratedRGB"/>
             <constraints>
                 <constraint firstItem="Drk-al-ltc" firstAttribute="top" secondItem="oSe-zQ-ucj" secondAttribute="bottom" constant="32" id="5Qu-nJ-A09"/>
                 <constraint firstItem="Drk-al-ltc" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="f6v-tp-8eE" secondAttribute="leading" constant="16" id="AqG-88-lCc"/>
