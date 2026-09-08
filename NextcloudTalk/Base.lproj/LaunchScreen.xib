@@ -15,6 +15,9 @@
             <rect key="frame" x="0.0" y="0.0" width="480" height="480"/>
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
+                <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launchGradient" translatesAutoresizingMaskIntoConstraints="NO" id="Xen-Gr-d01">
+                    <rect key="frame" x="0.0" y="0.0" width="480" height="480"/>
+                </imageView>
                 <imageView userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launchscreen" translatesAutoresizingMaskIntoConstraints="NO" id="Rrv-MP-hCW">
                     <rect key="frame" x="8" y="8" width="464" height="464"/>
                     <constraints>
@@ -27,6 +30,10 @@
             <constraints>
                 <constraint firstAttribute="centerX" secondItem="Rrv-MP-hCW" secondAttribute="centerX" id="0bC-RK-gM4"/>
                 <constraint firstAttribute="centerY" secondItem="Rrv-MP-hCW" secondAttribute="centerY" id="Uob-Sg-luZ"/>
+                <constraint firstItem="Xen-Gr-d01" firstAttribute="leading" secondItem="iN0-l3-epB" secondAttribute="leading" id="Xen-Gr-c01"/>
+                <constraint firstItem="Xen-Gr-d01" firstAttribute="trailing" secondItem="iN0-l3-epB" secondAttribute="trailing" id="Xen-Gr-c02"/>
+                <constraint firstItem="Xen-Gr-d01" firstAttribute="top" secondItem="iN0-l3-epB" secondAttribute="top" id="Xen-Gr-c03"/>
+                <constraint firstItem="Xen-Gr-d01" firstAttribute="bottom" secondItem="iN0-l3-epB" secondAttribute="bottom" id="Xen-Gr-c04"/>
             </constraints>
             <nil key="simulatedStatusBarMetrics"/>
             <freeformSimulatedSizeMetrics key="simulatedDestinationMetrics"/>
@@ -34,6 +41,7 @@
         </view>
     </objects>
     <resources>
+        <image name="launchGradient" width="250" height="444.66666666666669"/>
         <image name="launchscreen" width="200" height="200"/>
     </resources>
 </document>

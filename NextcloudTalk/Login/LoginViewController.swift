@@ -27,6 +27,11 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
     @IBOutlet weak var qrCodeButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
 
+    // XeniaCloud is a single-tenant white-label client — there is only ever one valid server.
+    static let xeniaCloudServerURL = "https://portal.xeniacloud.eu"
+
+    var backgroundGradientLayer: CAGradientLayer?
+
     @IBAction func loginButtonPressed(_ sender: Any) {
         startLoginProcess()
     }
@@ -45,14 +50,28 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Login view background color
+        // Login view background gradient (fallback flat color underneath, in case the layer fails to draw)
         view.backgroundColor = NCAppBranding.brandColor()
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.colors = [
+            UIColor(red: 0x00 / 255.0, green: 0x12 / 255.0, blue: 0x33 / 255.0, alpha: 1).cgColor,
+            UIColor(red: 0x00 / 255.0, green: 0x22 / 255.0, blue: 0x66 / 255.0, alpha: 1).cgColor,
+            UIColor(red: 0x00 / 255.0, green: 0x33 / 255.0, blue: 0x99 / 255.0, alpha: 1).cgColor
+        ]
+        gradientLayer.locations = [0.0, 0.55, 1.0]
+        gradientLayer.startPoint = CGPoint(x: 0.33, y: 0.0)
+        gradientLayer.endPoint = CGPoint(x: 0.67, y: 1.0)
+        gradientLayer.frame = view.bounds
+        view.layer.insertSublayer(gradientLayer, at: 0)
+        backgroundGradientLayer = gradientLayer
 
         // App logo
         self.appLogoImageView.image = UIImage(named: "loginLogo")
 
-        // Server TextField
+        // Server TextField — XeniaCloud is single-tenant, so the server is fixed and not user-editable
         serverTextField.delegate = self
+        serverTextField.text = LoginViewController.xeniaCloudServerURL
+        serverTextField.isEnabled = false
         serverTextField.textColor = NCAppBranding.brandTextColor()
         serverTextField.tintColor = NCAppBranding.brandTextColor()
         serverTextField.layer.borderColor = NCAppBranding.brandTextColor().cgColor
@@ -64,11 +83,8 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
         serverTextField.leftViewMode = .always
         serverTextField.rightView = paddingView
         serverTextField.rightViewMode = .always
-        serverTextField.attributedPlaceholder = NSAttributedString(
-            string: NSLocalizedString("Server address https://…", comment: ""),
-            attributes: [.foregroundColor: NCAppBranding.brandTextColor().withAlphaComponent(0.5)])
         serverLabel.textColor = NCAppBranding.brandTextColor()
-        serverLabel.text = NSLocalizedString("This is the web address you use to access your server in your web browser.", comment: "")
+        serverLabel.text = NSLocalizedString("Signing in to your XeniaCloud account.", comment: "")
 
         // Login button
         loginButton.setTitle(NSLocalizedString("Log in", comment: ""), for: .normal)
@@ -111,6 +127,11 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
         view.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         )
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        backgroundGradientLayer?.frame = view.bounds
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
