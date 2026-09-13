@@ -10,6 +10,10 @@
 #   - greps SOURCE, never the compiled Assets.car
 #   - matches case-insensitively (-i), so 0082C9 and 0082c9 both hit
 #
+# This script is excluded from its own scan: it necessarily contains the
+# pattern it searches for, both in PATTERN and in this header, and reporting
+# that hit every run drowns the real ones.
+#
 # Shipped-target hits fail the build. Hits outside the shipped target (docs,
 # unit-test fixtures) are reported as warnings: some are legitimate, because
 # the tests assert Nextcloud *server*-provided colours, which are not branding.
@@ -36,7 +40,7 @@ fi
 echo
 echo "==> Scanning remaining tracked files (warnings only)"
 others=$(git ls-files -z \
-    | grep -zvE "^($SHIPPED_DIR|Pods)/" \
+    | grep -zvE "^($SHIPPED_DIR|Pods)/|^scripts/xenia-brand-scan\.sh$" \
     | xargs -0 grep -IniE "$PATTERN" 2>/dev/null || true)
 if [ -n "$others" ]; then
     echo "WARNING: brand colour present outside the shipped target:"
