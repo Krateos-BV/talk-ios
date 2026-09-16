@@ -56,13 +56,13 @@ ASSETS = {
     "navigationLogo": (24, 24, 21.33, WHITE),
     "navigationLogoDark": (24, 24, 21.33, BLACK),
     "app-logo-callkit": (40, 40, 35.33, WHITE),
-    # logo-action is the odd one out. It replaced the Nextcloud three-circle
-    # mark, which filled its 24x11 canvas edge to edge - a much wider aspect
-    # than this glyph. Keeping that canvas would shrink the mark to under half
-    # its former width, so the canvas follows the glyph instead: width stays at
-    # 24, height becomes 23 so the glyph fills it. It renders as a template
-    # image at all three call sites, so only the alpha channel matters.
-    "logo-action": (24, 23, 24.0, WHITE),
+    # logo-action is deliberately absent. It sits next to "Open in Nextcloud"
+    # and identifies the Nextcloud app, so XNT-117 restored the upstream mark;
+    # rendering it here would silently undo that.
+    # XNT-106. launchscreen is drawn by LaunchScreen.xib on every cold start;
+    # talk-20 is a template image, so only its alpha channel matters.
+    "launchscreen": (200, 200, 175.33, WHITE),
+    "talk-20": (20, 20, 18.0, WHITE),
 }
 
 ASSET_ROOT = os.path.join("NextcloudTalk", "Images.xcassets")
