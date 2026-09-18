@@ -8,9 +8,9 @@ to AppIcon.icon/Assets/Talk-white.svg and changelog-avatar.imageset (XNT-92):
 two solid overlapping rounded rectangles plus a solid triangular tail, flat
 fill, no even-odd cutout. Geometry here is the same design expressed in the
 24x24 coordinate system of Talk-white.svg, with the tail-join fix from XNT-101 -
-the tail's top-left corner moves from x=6.8 to x=7.6 so it meets the straight
-part of the lower bubble's bottom edge rather than its rounded corner, which
-left a small notch.
+the whole tail shifts right by 0.8, from x 6.8/4.8/9.0 to 7.6/5.6/9.8, so its
+top edge meets the straight part of the lower bubble's bottom edge rather than
+its rounded corner, which left a small notch.
 
 Assets are PNG 1x/2x/3x imagesets rather than vectors, so every scale is
 rendered here. Each one keeps the footprint of the artwork it replaces: the
