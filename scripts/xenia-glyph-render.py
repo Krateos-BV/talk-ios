@@ -48,6 +48,11 @@ SUPERSAMPLE = 16
 
 WHITE = (255, 255, 255, 255)
 BLACK = (0, 0, 0, 255)
+# The grey the placeholder artwork is drawn in upstream, #d5d5d5. PlaceholderView
+# re-renders the image as a template and tints it with NCAppBranding
+# placeholderColor, so on screen only the alpha channel of these assets matters -
+# the colour is kept to match the sibling placeholders at source level.
+GREY = (213, 213, 213, 255)
 
 # name -> (canvas w, canvas h, glyph width, fill) at 1x. Canvas and glyph width
 # are taken from the asset being replaced; see the module docstring.
@@ -63,6 +68,9 @@ ASSETS = {
     # talk-20 is a template image, so only its alpha channel matters.
     "launchscreen": (200, 200, 175.33, WHITE),
     "talk-20": (20, 20, 18.0, WHITE),
+    # XNT-129. The empty conversation list. The mark it replaces is the
+    # Nextcloud outline "Q", 112pt wide on a 128pt canvas at every scale.
+    "conversations-placeholder": (128, 128, 112.0, GREY),
 }
 
 ASSET_ROOT = os.path.join("NextcloudTalk", "Images.xcassets")
