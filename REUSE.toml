@@ -12,11 +12,11 @@ SPDX-FileCopyrightText = "2017 Nextcloud GmbH and Nextcloud contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-# Redrawn from the Xenia two-bubble mark (XNT-101, XNT-106); no Nextcloud-derived
+# Redrawn from the Xenia two-bubble mark (XNT-101, XNT-106, XNT-129); no Nextcloud-derived
 # geometry remains in these files, so they are no longer covered by the
 # Nextcloud trademark grant below. Regenerate the PNGs with
 # scripts/xenia-glyph-render.py; Icons/talk.svg is hand-written from the same geometry.
-path = ["NextcloudTalk/Images.xcassets/loginLogo.imageset/loginLogo*.png", "NextcloudTalk/Images.xcassets/navigationLogo.imageset/navigationLogo*.png", "NextcloudTalk/Images.xcassets/navigationLogoDark.imageset/navigationLogoDark*.png", "NextcloudTalk/Images.xcassets/app-logo-callkit.imageset/app-logo-callkit*.png", "NextcloudTalk/Images.xcassets/launchscreen.imageset/launchscreen*.png", "NextcloudTalk/Images.xcassets/talk-20.imageset/talk-20*.png", "Icons/talk.svg"]
+path = ["NextcloudTalk/Images.xcassets/loginLogo.imageset/loginLogo*.png", "NextcloudTalk/Images.xcassets/navigationLogo.imageset/navigationLogo*.png", "NextcloudTalk/Images.xcassets/navigationLogoDark.imageset/navigationLogoDark*.png", "NextcloudTalk/Images.xcassets/app-logo-callkit.imageset/app-logo-callkit*.png", "NextcloudTalk/Images.xcassets/launchscreen.imageset/launchscreen*.png", "NextcloudTalk/Images.xcassets/talk-20.imageset/talk-20*.png", "NextcloudTalk/Images.xcassets/conversations-placeholder.imageset/conversations-placeholder*.png", "Icons/talk.svg"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 XeniaCloud"
 SPDX-License-Identifier = "GPL-3.0-or-later"
