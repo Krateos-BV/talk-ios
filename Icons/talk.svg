@@ -1,1 +1,10 @@
-<svg width="16" height="16" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="m7.9992 0.999a6.9993 6.9994 0 0 0-6.9992 6.9996 6.9993 6.9994 0 0 0 6.9992 6.9994 6.9993 6.9994 0 0 0 3.6308-1.024c0.86024 0.34184 2.7871 1.356 3.2457 0.91794 0.47922-0.45765-0.56261-2.6116-0.81238-3.412a6.9993 6.9994 0 0 0 0.935-3.4814 6.9993 6.9994 0 0 0-6.9991-6.9993zm8e-4 2.6611a4.34 4.3401 0 0 1 4.34 4.3401 4.34 4.3401 0 0 1-4.34 4.3398 4.34 4.3401 0 0 1-4.34-4.3398 4.34 4.3401 0 0 1 4.34-4.3401z" fill="#fff" stroke-width=".14"/></svg>
+<svg width="16" height="16" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <!-- Xenia two-bubble mark (XNT-106). Shapes are the 24x24 geometry of
+       scripts/xenia-glyph-render.py, including the XNT-101 tail-join fix,
+       scaled to 14px wide and centred in 16x16. -->
+  <g fill="#fff" transform="translate(-4.0556 -4.9306) scale(0.97222)">
+    <rect x="11.6" y="6.4" width="8" height="6.4" rx="1.8"/>
+    <rect x="5.2" y="10.4" width="9.2" height="7.2" rx="2.2"/>
+    <path d="M 7.6 17.6 L 5.6 20.2 L 9.8 17.6 Z"/>
+  </g>
+</svg>

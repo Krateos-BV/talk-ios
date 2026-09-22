@@ -63,3 +63,12 @@ jobs:
         CODE_SIGNING_REQUIRED=NO \
         CODE_SIGN_IDENTITY="" \
         | xcbeautify --quieter
+
+    - name: Locate built .app
+      run: find DerivedData/Build/Products -maxdepth 2 -type d -name "*.app"
+
+    - name: Upload built .app
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: NextcloudTalk-app
+        path: DerivedData/Build/Products/**/*.app
