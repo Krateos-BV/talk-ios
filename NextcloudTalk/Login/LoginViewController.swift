@@ -68,10 +68,36 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
         // App logo
         self.appLogoImageView.image = UIImage(named: "loginLogo")
 
-        // Server TextField — XeniaCloud is single-tenant, so the server is fixed and not user-editable
+        // Server TextField — XeniaCloud is single-tenant, so the server is fixed and not user-editable.
+        //
+        // The one exception is the UI test suite. Its shared launchAndLogin() helper taps this
+        // field and types TestConstants.server to reach the per-version Nextcloud container CI
+        // starts, and a disabled UITextField cannot take keyboard focus, so locking it
+        // unconditionally made every UI test fail at login (XNT-191).
+        //
+        // Honour the -TestEnvironment launch argument the helper already sets — but only behind
+        // a compile-time flag, so the escape hatch cannot exist in a shipped binary and the
+        // single-tenant guarantee holds for every real user.
+        //
+        // XENIA_TEST_SERVER_UNLOCK is set in SWIFT_ACTIVE_COMPILATION_CONDITIONS on this
+        // target's Debug configuration only. Note it is deliberately NOT `#if DEBUG`: this
+        // project never defines DEBUG for the app target in any configuration (upstream does
+        // not either — com.nextcloud.Talk has SWIFT_ACTIVE_COMPILATION_CONDITIONS unset in
+        // both Debug and Release), so a `#if DEBUG` guard here compiles to false even in a
+        // debug build and silently does nothing. Our own flag is the only reliable signal.
+        //
+        // Leaving the field empty and enabled in that case is exactly upstream's behaviour:
+        // upstream never pre-fills it, it just shows the placeholder and waits for input.
         serverTextField.delegate = self
-        serverTextField.text = LoginViewController.xeniaCloudServerURL
-        serverTextField.isEnabled = false
+        #if XENIA_TEST_SERVER_UNLOCK
+        let isUITestEnvironment = ProcessInfo.processInfo.arguments.contains("-TestEnvironment")
+        #else
+        let isUITestEnvironment = false
+        #endif
+        serverTextField.isEnabled = isUITestEnvironment
+        if !isUITestEnvironment {
+            serverTextField.text = LoginViewController.xeniaCloudServerURL
+        }
         serverTextField.textColor = NCAppBranding.brandTextColor()
         serverTextField.tintColor = NCAppBranding.brandTextColor()
         serverTextField.layer.borderColor = NCAppBranding.brandTextColor().cgColor
