@@ -68,10 +68,30 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
         // App logo
         self.appLogoImageView.image = UIImage(named: "loginLogo")
 
-        // Server TextField — XeniaCloud is single-tenant, so the server is fixed and not user-editable
+        // Server TextField — XeniaCloud is single-tenant, so the server is fixed and not user-editable.
+        //
+        // The one exception is the UI test suite. Its shared launchAndLogin() helper taps this
+        // field and types TestConstants.server to reach the per-version Nextcloud container CI
+        // starts, and a disabled UITextField cannot take keyboard focus, so locking it
+        // unconditionally made every UI test fail at login (XNT-191).
+        //
+        // Honour the -TestEnvironment launch argument the helper already sets — but only under
+        // #if DEBUG, so the escape hatch cannot exist in a shipped binary and the single-tenant
+        // guarantee holds for every real user. The Test action builds Debug and Archive builds
+        // Release, so CI gets the editable field and released builds never can.
+        //
+        // Leaving the field empty and enabled in that case is exactly upstream's behaviour:
+        // upstream never pre-fills it, it just shows the placeholder and waits for input.
         serverTextField.delegate = self
-        serverTextField.text = LoginViewController.xeniaCloudServerURL
-        serverTextField.isEnabled = false
+        #if DEBUG
+        let isUITestEnvironment = ProcessInfo.processInfo.arguments.contains("-TestEnvironment")
+        #else
+        let isUITestEnvironment = false
+        #endif
+        serverTextField.isEnabled = isUITestEnvironment
+        if !isUITestEnvironment {
+            serverTextField.text = LoginViewController.xeniaCloudServerURL
+        }
         serverTextField.textColor = NCAppBranding.brandTextColor()
         serverTextField.tintColor = NCAppBranding.brandTextColor()
         serverTextField.layer.borderColor = NCAppBranding.brandTextColor().cgColor
