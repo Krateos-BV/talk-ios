@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 XeniaCloud
+# SPDX-License-Identifier: MIT
+
 # XeniaCloud CI — unsigned build verification for the xenia-rebrand fork.
 # XNT-50. Build-only (no test matrix, no signing) — deliberately narrower than
 # upstream's talk-ios-tests.yml, which also runs a 5-config server test matrix.
