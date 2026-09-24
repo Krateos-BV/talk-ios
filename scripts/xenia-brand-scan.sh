@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 XeniaCloud
+# SPDX-License-Identifier: MIT
 # XNT-76. Case-insensitive scan for leftover Nextcloud brand colours.
 #
 # Background: the ad-hoc scans used to sign off XNT-59 were case-sensitive and
