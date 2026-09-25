@@ -2569,11 +2569,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.TalkIntents;
@@ -2615,11 +2611,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.TalkIntents;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2719,11 +2711,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.BroadcastUploadExtension;
@@ -2768,11 +2756,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.BroadcastUploadExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2936,13 +2920,8 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk;
-=======
-				MARKETING_VERSION = 25.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.nextcloud.Talk;
->>>>>>> upstream/main
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "XENIA_TEST_SERVER_UNLOCK $(inherited)";
@@ -2987,13 +2966,8 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk;
-=======
-				MARKETING_VERSION = 25.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.nextcloud.Talk;
->>>>>>> upstream/main
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "NextcloudTalk/NextcloudTalk-Bridging-Header.h";
@@ -3077,11 +3051,7 @@
 					"\"${PODS_CONFIGURATION_BUILD_DIR}/UICKeyChainStore\"",
 					"\"${PODS_ROOT}/Realm/core\"",
 				);
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.ShareExtension;
@@ -3172,11 +3142,7 @@
 					"\"${PODS_CONFIGURATION_BUILD_DIR}/UICKeyChainStore\"",
 					"\"${PODS_ROOT}/Realm/core\"",
 				);
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.ShareExtension;
 				PRODUCT_NAME = ShareExtension;
@@ -3247,11 +3213,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NotificationServiceExtension;
@@ -3323,11 +3285,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-<<<<<<< HEAD
 				MARKETING_VERSION = 26.9.19;
-=======
-				MARKETING_VERSION = 25.0.2;
->>>>>>> upstream/main
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
