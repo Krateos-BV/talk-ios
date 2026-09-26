@@ -550,3 +550,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
         NCSettingsController.sharedInstance().connectDisconnectedExternalSignalingControllers()
     }
 }
+
+// XNT-215: deliberate syntax error to prove the build check can fail.
+func xnt215DeliberateBreak( -> {
