@@ -7,7 +7,21 @@
 
 name: Xenia CI (unsigned build)
 
+# XNT-215: until 26 Sep 2026 this was `workflow_dispatch:` only, so `main` had no
+# build check at all — 8 runs ever, all on feature branches, zero on the default
+# branch. main HEAD had never been compiled by CI, and upstream's
+# talk-ios-tests.yml is `pull_request:`-only, so it could not cover the gap.
+#
+# No `paths:` filter here, deliberately. This job is meant to become a required
+# status check, and a required check that does not run is indistinguishable from
+# one that is still pending: GitHub blocks the PR forever rather than passing it.
+# A `paths:`-filtered required check is therefore a trap, and so is a push-only
+# one. The cost is that every PR compiles even when only docs changed; that is
+# the price of a signal that cannot silently go missing.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
