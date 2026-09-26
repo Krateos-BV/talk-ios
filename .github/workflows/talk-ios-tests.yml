@@ -218,7 +218,7 @@ jobs:
         name: Products
 
     - name: Check status.php
-      run: curl -s --retry 5 --retry-delay 5 --retry-all-errors http://localhost:8080/status.php || true
+      run: curl -fsS --retry 5 --retry-delay 5 --retry-all-errors http://localhost:8080/status.php | grep -q '"installed":true'
 
     - name: Setup test-specific rooms
       run: |
@@ -288,4 +288,6 @@ jobs:
 
     steps:
       - name: Summary status
-        run: if ${{ needs.test.result != 'success' }}; then exit 1; fi
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: '[ "$TEST_RESULT" = "success" ]'
