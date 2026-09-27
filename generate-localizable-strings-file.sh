@@ -9,6 +9,7 @@ echo 'Generating Localizable.strings file...'
 
 CURRENT_BRANCH=$(git branch --show-current)
 STABLE_BRANCH=$(<.tx/backport)
+UPSTREAM_URL=https://github.com/nextcloud/talk-ios.git
 
 if [[ "$CURRENT_BRANCH" != $STABLE_BRANCH && ! "$CURRENT_BRANCH" =~ ^backport/[[:digit:]]+/"$STABLE_BRANCH"$ ]]; then
   echo "Not on $STABLE_BRANCH branch, cloning $STABLE_BRANCH branch"
@@ -17,6 +18,12 @@ if [[ "$CURRENT_BRANCH" != $STABLE_BRANCH && ! "$CURRENT_BRANCH" =~ ^backport/[[
   if [ -z "$REMOTE_URL" ]; then
   	echo "No remote URL found. Please check your git config."
   	exit 1
+  fi
+
+  # This fork keeps only main; its backport branches live upstream.
+  if ! git ls-remote --exit-code --heads "$REMOTE_URL" "refs/heads/$STABLE_BRANCH" > /dev/null; then
+    echo "$STABLE_BRANCH not found on $REMOTE_URL, using $UPSTREAM_URL"
+    REMOTE_URL=$UPSTREAM_URL
   fi
 
   git clone --branch $STABLE_BRANCH --single-branch --depth 1 $REMOTE_URL $STABLE_BRANCH
