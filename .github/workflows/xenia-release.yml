@@ -234,6 +234,13 @@ jobs:
             exit 1
           fi
 
+          # altool has no flag for an arbitrary key path -- it only looks in a fixed
+          # set of default locations, none of which is $RUNNER_TEMP (where the earlier
+          # "Prepare App Store Connect API key" step wrote the key for xcodebuild's
+          # -authenticationKeyPath). Mirror it into one altool actually searches.
+          mkdir -p "$HOME/private_keys"
+          cp "$ASC_KEY_PATH" "$HOME/private_keys/"
+
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
