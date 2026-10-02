@@ -174,6 +174,48 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             | xcbeautify --quieter
 
+      # --- Manually-created App Store distribution profiles.
+      #
+      # Cloud Managed Signing can create a Development-type profile via the
+      # ASC API key (that's what Archive above uses), but cannot create a
+      # genuine "iOS App Store" distribution profile that way -- every
+      # attempt at automatic export signing failed with "Cloud signing
+      # permission error", regardless of certificate validity or quota.
+      # These 5 App Store profiles were created manually in the portal
+      # (a one-time, human action) and are installed here so Export can
+      # reference them explicitly instead of asking Apple to create one on
+      # the fly.
+      - name: Install App Store provisioning profiles
+        env:
+          APPLE_PROFILE_TALK: ${{ secrets.APPLE_PROFILE_TALK }}
+          APPLE_PROFILE_TALK_INTENTS: ${{ secrets.APPLE_PROFILE_TALK_INTENTS }}
+          APPLE_PROFILE_TALK_BROADCASTUPLOAD: ${{ secrets.APPLE_PROFILE_TALK_BROADCASTUPLOAD }}
+          APPLE_PROFILE_TALK_SHARE: ${{ secrets.APPLE_PROFILE_TALK_SHARE }}
+          APPLE_PROFILE_TALK_NOTIFICATIONSERVICE: ${{ secrets.APPLE_PROFILE_TALK_NOTIFICATIONSERVICE }}
+        run: |
+          set -euo pipefail
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+
+          install_profile() {
+            local name="$1" b64="$2"
+            local tmp
+            tmp=$(mktemp)
+            echo "$b64" | base64 --decode > "$tmp"
+            local uuid
+            uuid=$(security cms -D -i "$tmp" | /usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin 2>/dev/null \
+              || { d=$(mktemp); security cms -D -i "$tmp" > "$d"; /usr/libexec/PlistBuddy -c "Print :UUID" "$d"; rm -f "$d"; })
+            cp "$tmp" "$PROFILES_DIR/$uuid.mobileprovision"
+            rm -f "$tmp"
+            echo "Installed $name -> $uuid.mobileprovision"
+          }
+
+          install_profile "Xenia Talk App Store" "$APPLE_PROFILE_TALK"
+          install_profile "Xenia Talk Intents App Store" "$APPLE_PROFILE_TALK_INTENTS"
+          install_profile "Xenia Talk BroadcastUploadExtension App Store" "$APPLE_PROFILE_TALK_BROADCASTUPLOAD"
+          install_profile "Xenia Talk ShareExtension App Store" "$APPLE_PROFILE_TALK_SHARE"
+          install_profile "Xenia Talk NotificationServiceExtension App Store" "$APPLE_PROFILE_TALK_NOTIFICATIONSERVICE"
+
       - name: Write ExportOptions.plist
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -188,9 +230,24 @@ jobs:
             <key>teamID</key>
             <string>${APPLE_TEAM_ID}</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
             <key>uploadSymbols</key>
             <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>eu.xeniacloud.talk</key>
+              <string>Xenia Talk App Store</string>
+              <key>eu.xeniacloud.talk.TalkIntents</key>
+              <string>Xenia Talk Intents App Store</string>
+              <key>eu.xeniacloud.talk.BroadcastUploadExtension</key>
+              <string>Xenia Talk BroadcastUploadExtension App Store</string>
+              <key>eu.xeniacloud.talk.ShareExtension</key>
+              <string>Xenia Talk ShareExtension App Store</string>
+              <key>eu.xeniacloud.talk.NotificationServiceExtension</key>
+              <string>Xenia Talk NotificationServiceExtension App Store</string>
+            </dict>
           </dict>
           </plist>
           PLIST
