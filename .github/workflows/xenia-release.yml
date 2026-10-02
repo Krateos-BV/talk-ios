@@ -199,14 +199,14 @@ jobs:
 
           install_profile() {
             local name="$1" b64="$2"
-            local tmp
-            tmp=$(mktemp)
-            echo "$b64" | base64 --decode > "$tmp"
-            local uuid
-            uuid=$(security cms -D -i "$tmp" | /usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin 2>/dev/null \
-              || { d=$(mktemp); security cms -D -i "$tmp" > "$d"; /usr/libexec/PlistBuddy -c "Print :UUID" "$d"; rm -f "$d"; })
-            cp "$tmp" "$PROFILES_DIR/$uuid.mobileprovision"
-            rm -f "$tmp"
+            local tmp_profile tmp_plist uuid
+            tmp_profile=$(mktemp)
+            tmp_plist=$(mktemp)
+            echo "$b64" | base64 --decode > "$tmp_profile"
+            security cms -D -i "$tmp_profile" > "$tmp_plist"
+            uuid=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$tmp_plist")
+            cp "$tmp_profile" "$PROFILES_DIR/$uuid.mobileprovision"
+            rm -f "$tmp_profile" "$tmp_plist"
             echo "Installed $name -> $uuid.mobileprovision"
           }
 
