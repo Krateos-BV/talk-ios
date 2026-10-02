@@ -174,11 +174,69 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             | xcbeautify --quieter
 
+      # --- Export signing: manual, not automatic.
+      #
+      # ExportOptions.plist's `signingCertificate` and `provisioningProfiles`
+      # keys are explicitly documented by `xcodebuild -help` as "for manual
+      # signing only" -- with signingStyle=automatic (the previous setting)
+      # they are silently ignored, and export falls back entirely to Cloud
+      # Managed Signing resolving a certificate via the ASC API with no
+      # awareness of the certificate already imported into our temporary
+      # keychain. That repeatedly failed with "Cloud signing permission
+      # error" / "No signing certificate 'iOS Distribution' found", and every
+      # attempt to let it self-heal burned through Apple's small per-type
+      # certificate quota instead.
+      #
+      # The archive step above already succeeded using the imported
+      # certificate, which means a real, usable provisioning profile for
+      # every target is already sitting in the signed .xcarchive. Read each
+      # one's UUID directly out of its embedded.mobileprovision and reuse it
+      # here, so export reuses what archive already proved works instead of
+      # asking Apple to resolve everything again from scratch.
+      - name: Extract embedded provisioning profile UUIDs
+        id: profiles
+        run: |
+          set -euo pipefail
+
+          get_bundle_id() {
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$1/Info.plist"
+          }
+          get_uuid() {
+            local tmp_plist
+            tmp_plist=$(mktemp)
+            security cms -D -i "$1/embedded.mobileprovision" > "$tmp_plist"
+            /usr/libexec/PlistBuddy -c "Print :UUID" "$tmp_plist"
+            rm -f "$tmp_plist"
+          }
+
+          APP_PATH=$(find "${{ env.ARCHIVE_PATH }}/Products/Applications" -maxdepth 1 -name "*.app")
+
+          MAIN_BUNDLE_ID=$(get_bundle_id "$APP_PATH")
+          MAIN_UUID=$(get_uuid "$APP_PATH")
+          echo "main_bundle_id=$MAIN_BUNDLE_ID" >> "$GITHUB_OUTPUT"
+          echo "main_uuid=$MAIN_UUID" >> "$GITHUB_OUTPUT"
+          echo "Main app: $MAIN_BUNDLE_ID -> $MAIN_UUID"
+
+          EXTENSIONS_FILE="$RUNNER_TEMP/extension_profiles.txt"
+          : > "$EXTENSIONS_FILE"
+          for ext in "$APP_PATH"/PlugIns/*.appex; do
+            [ -d "$ext" ] || continue
+            bid=$(get_bundle_id "$ext")
+            uuid=$(get_uuid "$ext")
+            echo "Extension: $bid -> $uuid"
+            echo "$bid|$uuid" >> "$EXTENSIONS_FILE"
+          done
+
       - name: Write ExportOptions.plist
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MAIN_BUNDLE_ID: ${{ steps.profiles.outputs.main_bundle_id }}
+          MAIN_UUID: ${{ steps.profiles.outputs.main_uuid }}
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          set -euo pipefail
+          OPTIONS="$RUNNER_TEMP/ExportOptions.plist"
+
+          cat > "$OPTIONS" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -188,13 +246,29 @@ jobs:
             <key>teamID</key>
             <string>${APPLE_TEAM_ID}</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
             <key>uploadSymbols</key>
             <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${MAIN_BUNDLE_ID}</key>
+              <string>${MAIN_UUID}</string>
+            </dict>
           </dict>
           </plist>
           PLIST
-          echo "EXPORT_OPTIONS_PATH=$RUNNER_TEMP/ExportOptions.plist" >> "$GITHUB_ENV"
+
+          while IFS='|' read -r bid uuid; do
+            [ -n "$bid" ] || continue
+            /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$bid string $uuid" "$OPTIONS"
+          done < "$RUNNER_TEMP/extension_profiles.txt"
+
+          echo "--- ExportOptions.plist ---"
+          cat "$OPTIONS"
+
+          echo "EXPORT_OPTIONS_PATH=$OPTIONS" >> "$GITHUB_ENV"
 
       - name: Export .ipa
         env:
