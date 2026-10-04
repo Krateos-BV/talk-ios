@@ -3,21 +3,25 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Render the Xenia two-bubble glyph into the PNG imagesets that need it.
 
-The glyph is the mark approved on 12 Sep 2026 and already applied in vector form
-to AppIcon.icon/Assets/Talk-white.svg and changelog-avatar.imageset (XNT-92):
-two solid overlapping rounded rectangles plus a solid triangular tail, flat
-fill, no even-odd cutout. Geometry here is the same design expressed in the
-24x24 coordinate system of Talk-white.svg, with the tail-join fix from XNT-101 -
-the whole tail shifts right by 0.8, from x 6.8/4.8/9.0 to 7.6/5.6/9.8, so its
-top edge meets the straight part of the lower bubble's bottom edge rather than
-its rounded corner, which left a small notch.
+The glyph is the separated-bubble mark adopted for the whole estate (XNT-249
+follow-up): two equal rounded rectangles (point-symmetric to each other about
+the glyph's centre), each with its own downward-pointing triangular tail,
+flat fill, no even-odd cutout, separated by a real gap. This replaces the
+original overlapping-bubble mark (approved 12 Sep 2026, XNT-92) that
+talk-desktop itself moved away from on 20 Sep 2026 because it "collapsed
+into an ambiguous blob" at small sizes (tray icon) -- talk-ios had kept the
+old mark until now. Geometry here is the same design expressed in the 24x24
+coordinate system of Talk-white.svg, ported proportionally from
+talk-desktop's img/talk-icon-mac-shadow.svg 1024x1024 source (scale 24/1024).
 
 Assets are PNG 1x/2x/3x imagesets rather than vectors, so every scale is
 rendered here. Each one keeps the footprint of the artwork it replaces: the
 glyph is scaled to the width of the previous glyph's alpha bounding box and
 centred on that box, so navigation bars and the login screen keep their
-existing rhythm. The glyph is wider than it is tall, so matching width leaves
-it very slightly shorter than the old circular mark.
+existing rhythm. This mark is taller than it is wide (unlike the old
+overlapping-bubble mark, which was wider than tall), so matching width now
+leaves noticeably less vertical margin than before on square/near-square
+canvases -- nothing is clipped, but it runs close to the edge.
 
 Run from the repository root:
 
@@ -37,12 +41,13 @@ except ImportError:  # pragma: no cover
 
 # Glyph geometry in the 24x24 frame of AppIcon.icon/Assets/Talk-white.svg.
 # rect: (x, y, width, height, corner radius)
-RECT_UPPER = (11.6, 6.4, 8.0, 6.4, 1.8)
-RECT_LOWER = (5.2, 10.4, 9.2, 7.2, 2.2)
-TAIL = ((7.6, 17.6), (5.6, 20.2), (9.8, 17.6))
+RECT_UPPER = (10.68, 3.56, 10.08, 7.03, 2.23)
+RECT_LOWER = (3.24, 13.41, 10.08, 7.03, 2.23)
+TAIL_UPPER = ((18.42, 10.59), (20.41, 13.05), (16.19, 10.59))
+TAIL_LOWER = ((5.58, 20.44), (3.59, 22.90), (7.81, 20.44))
 
-# Tight bounding box of the three shapes above, used to place the glyph.
-GLYPH_BOX = (5.2, 6.4, 19.6, 20.2)
+# Tight bounding box of the four shapes above, used to place the glyph.
+GLYPH_BOX = (3.24, 3.56, 20.76, 22.90)
 
 SUPERSAMPLE = 16
 
@@ -97,7 +102,8 @@ def render(canvas_w, canvas_h, glyph_w, fill, scale):
         x0, y0 = point(x, y)
         x1, y1 = point(x + w, y + h)
         draw.rounded_rectangle((x0, y0, x1, y1), radius=radius * k, fill=fill)
-    draw.polygon([point(*p) for p in TAIL], fill=fill)
+    for tail in (TAIL_UPPER, TAIL_LOWER):
+        draw.polygon([point(*p) for p in tail], fill=fill)
 
     # BOX, not LANCZOS: the supersample factor is an exact integer, so a box
     # filter is plain area averaging and is what antialiases the edges. Lanczos
