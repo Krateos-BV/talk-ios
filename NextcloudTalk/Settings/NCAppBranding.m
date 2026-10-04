@@ -23,12 +23,12 @@ typedef enum NCTextColorStyle {
 
 NSString * const talkAppName = @"Xenia Talk";
 NSString * const filesAppName = @"Nextcloud";
-NSString * const copyright = @"© 2026 Nextcloud GmbH";
+NSString * const copyright = @"© 2026 Krateos B.V.";
 NSString * const bundleIdentifier = @"eu.xeniacloud.talk";
 NSString * const groupIdentifier = @"group.eu.xeniacloud.talk";
 NSString * const appsGroupIdentifier = @"group.eu.xeniacloud.apps";
 NSString * const pushNotificationServer = @"https://push-notifications.nextcloud.com";
-NSString * const privacyURL = @"https://nextcloud.com/privacy";
+NSString * const privacyURL = @"https://xeniacloud.eu/privacy-policy/";
 BOOL const isBrandedApp = YES;
 BOOL const multiAccountEnabled = YES;
 BOOL const useAppsGroup = YES;
