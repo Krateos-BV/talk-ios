@@ -75,12 +75,16 @@ python3 -m venv /tmp/glyph-venv && /tmp/glyph-venv/bin/pip install Pillow
 
 ### How the script is laid out
 
-The geometry constants at the top express the same three shapes as `Talk-white.svg`,
-in the same 24x24 frame: `RECT_UPPER`, `RECT_LOWER` and `TAIL`, with `GLYPH_BOX` as
-their tight bounding box. **`Talk-white.svg` and these constants must agree** — they
-are two hand-maintained copies of one design, and they have drifted apart before
-(XNT-131 fixed the SVG keeping a pre-XNT-101 tail long after the script had moved on).
-`Icons/talk.svg` is a third copy, hand-written from the same numbers.
+The geometry constants at the top express the same four shapes as `Talk-white.svg`,
+in the same 24x24 frame: `RECT_UPPER`, `RECT_LOWER`, `TAIL_UPPER` and `TAIL_LOWER`
+(one tail per bubble, since the separated-bubble mark adopted in the XNT-249
+follow-up gives each bubble its own tail), with `GLYPH_BOX` as their tight bounding
+box. **`Talk-white.svg` and these constants must agree** — they are two
+hand-maintained copies of one design, and they have drifted apart before (XNT-131
+fixed the SVG keeping a pre-XNT-101 tail long after the script had moved on).
+`Icons/talk.svg` and `changelog-avatar.imageset/changelog.svg` are two more copies,
+hand-written from the same numbers (the changelog one with its own tighter fit,
+since it gets clipped to a circle by `AvatarView`).
 
 `ASSETS` maps each imageset name to its canvas size, the glyph's width, and a fill
 colour. Read that table in the file rather than trusting a list here. Two conventions
@@ -88,8 +92,11 @@ hold across its rows:
 
 - **Footprint is preserved.** Each asset keeps the alpha bounding box of the artwork it
   replaced: measure the old PNG's alpha box at @3x, divide by three, and use that as the
-  glyph width. The Xenia mark is wider than it is tall, so matching width leaves a new
-  asset slightly shorter than the round mark it replaces. That is expected.
+  glyph width. The separated-bubble mark is taller than it is wide (the original
+  overlapping-bubble mark was the other way round), so matching width now leaves less
+  vertical margin than before on square/near-square canvases (`talk-20`,
+  `navigationLogo*`, `app-logo-callkit`) — nothing is clipped today, but there's little
+  room left if the mark grows again.
 - **Fill colour is often cosmetic.** For several of these only the alpha channel reaches
   the screen. Every `talk-20` call site re-renders it either `.alwaysTemplate` or with an
   explicit `withTintColor`, and every `*-placeholder` goes through

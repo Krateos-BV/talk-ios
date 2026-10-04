@@ -1,10 +1,12 @@
 <svg width="16" height="16" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <!-- Xenia two-bubble mark (XNT-106). Shapes are the 24x24 geometry of
-       scripts/xenia-glyph-render.py, including the XNT-101 tail-join fix,
+  <!-- Xenia two-bubble mark, separated-bubble revision (XNT-249 follow-up).
+       Shapes are the 24x24 geometry of scripts/xenia-glyph-render.py,
+       ported proportionally from talk-desktop's separated-bubble design,
        scaled to 14px wide and centred in 16x16. -->
-  <g fill="#fff" transform="translate(-4.0556 -4.9306) scale(0.97222)">
-    <rect x="11.6" y="6.4" width="8" height="6.4" rx="1.8"/>
-    <rect x="5.2" y="10.4" width="9.2" height="7.2" rx="2.2"/>
-    <path d="M 7.6 17.6 L 5.6 20.2 L 9.8 17.6 Z"/>
+  <g fill="#fff" transform="translate(-1.5890 -2.5719) scale(0.79909)">
+    <rect x="10.68" y="3.56" width="10.08" height="7.03" rx="2.23"/>
+    <rect x="3.24" y="13.41" width="10.08" height="7.03" rx="2.23"/>
+    <path d="M 18.42 10.59 L 20.41 13.05 L 16.19 10.59 Z"/>
+    <path d="M 5.58 20.44 L 3.59 22.90 L 7.81 20.44 Z"/>
   </g>
 </svg>
