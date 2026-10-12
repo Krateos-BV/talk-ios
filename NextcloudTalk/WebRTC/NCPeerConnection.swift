@@ -53,6 +53,15 @@ public class NCPeerConnection: NSObject {
     var addedTime: Int = 0
     var selectedSimulcastVideoQuality: SimulcastVideoQuality?
     var isRemoteVideoBlockedInMCU = false
+<<<<<<< HEAD
+=======
+
+    // Keys of the remote participant, set for end-to-end encrypted calls before any media is received
+    var receiverKeyRing: RTCTalkKeyRing?
+
+    // The encrypted frame format only works with VP8
+    var preferredVideoCodec = "H264"
+>>>>>>> upstream/main
 
     /// "peerId-sid"
     var peerIdentifier: String {
@@ -159,7 +168,7 @@ public class NCPeerConnection: NSObject {
     func setRemoteDescription(_ sessionDescription: RTCSessionDescription?) {
         WebRTCCommon.shared.assertQueue()
 
-        guard let sessionDescription, let sdpPreferringCodec = ARDSDPUtils.description(for: sessionDescription, preferredVideoCodec: "H264") else {
+        guard let sessionDescription, let sdpPreferringCodec = ARDSDPUtils.description(for: sessionDescription, preferredVideoCodec: preferredVideoCodec) else {
             return
         }
         peerConnection?.setRemoteDescription(sdpPreferringCodec) { [weak self] error in
@@ -340,8 +349,7 @@ public class NCPeerConnection: NSObject {
             return
         }
 
-        // Set H264 as preferred codec.
-        guard let sdpPreferringCodec = ARDSDPUtils.description(for: sdp, preferredVideoCodec: "H264") else {
+        guard let sdpPreferringCodec = ARDSDPUtils.description(for: sdp, preferredVideoCodec: preferredVideoCodec) else {
             return
         }
 
@@ -572,6 +580,11 @@ extension NCPeerConnection: RTCPeerConnectionDelegate {
     }
 
     public func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
+        // Attached right away on the signaling thread, frames arriving before would reach the decoder encrypted
+        if let receiverKeyRing {
+            rtpReceiver.setTalkKeyRing(receiverKeyRing)
+        }
+
         WebRTCCommon.shared.dispatch {
             guard let stream = mediaStreams.first else {
                 return
