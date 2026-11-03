@@ -1,0 +1,13 @@
+{
+  "bundle_id_prefix": "eu.xeniacloud.talk",
+  "allowed_app_groups": ["group.eu.xeniacloud.talk", "group.eu.xeniacloud.apps"],
+  "login": {
+    "file": "NextcloudTalk/Login/LoginViewController.swift",
+    "contains": "xeniaCloudServerURL = \"https://portal.xeniacloud.eu\""
+  },
+  "brand_colours": {
+    "mode": "fail",
+    "shipped_dirs": ["NextcloudTalk", "ShareExtension", "NotificationServiceExtension",
+                     "BroadcastUploadExtension", "TalkIntents"]
+  }
+}
