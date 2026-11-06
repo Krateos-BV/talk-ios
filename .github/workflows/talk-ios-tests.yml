@@ -63,13 +63,13 @@ jobs:
 
     # setup-cocoapods uninstalls and reinstalls CocoaPods on every run, which on the
     # self-hosted Mac Mini would change the machine (and needs root). Use the installed
-    # pod, or install it for the runner user only.
+    # pod, or install it once through Homebrew (macOS's own Ruby 2.6 is too old for it).
     - name: Setup Cocoapods
       run: |
         if ! command -v pod >/dev/null 2>&1; then
-          gem install --user-install cocoapods --no-document
-          echo "$(ruby -e 'print Gem.user_dir')/bin" >> "$GITHUB_PATH"
+          brew install cocoapods
         fi
+        pod --version
 
     - name: Set up dependencies talk-ios
       run: |
