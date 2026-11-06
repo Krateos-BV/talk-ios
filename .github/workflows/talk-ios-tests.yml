@@ -314,6 +314,8 @@ jobs:
     - name: Test NextcloudTalk iOS
       run: |
         xcrun simctl privacy booted grant camera eu.xeniacloud.talk
+        # The call tests need the microphone; on the iOS 27.2 simulator the prompt blocks "Hang up".
+        xcrun simctl privacy booted grant microphone eu.xeniacloud.talk
 
         set -o pipefail && \
         xcodebuild test-without-building \
