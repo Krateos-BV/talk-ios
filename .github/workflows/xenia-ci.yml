@@ -32,14 +32,17 @@ permissions:
   contents: read
 
 env:
+  # The self-hosted runner service starts without a locale; CocoaPods crashes on a non-UTF-8 one.
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
   WORKSPACE: NextcloudTalk.xcworkspace
   SCHEME: NextcloudTalk
-  XCODE_VERSION: "26.5"
+  XCODE_VERSION: "27.2"
 
 jobs:
   build:
     name: Build (unsigned)
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
     - name: Checkout
@@ -55,10 +58,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pods-
 
+    # setup-cocoapods uninstalls and reinstalls CocoaPods on every run, which on the
+    # self-hosted Mac Mini would change the machine (and needs root). Use the installed
+    # pod, or install it once through Homebrew (macOS's own Ruby 2.6 is too old for it).
     - name: Setup Cocoapods
-      uses: maxim-lobanov/setup-cocoapods@8e97e1e98e6ccf42564fdf5622c8feec74199377 # v1.4.0
-      with:
-        version: latest
+      run: |
+        # The runner service's PATH does not include Homebrew; add it for this and later steps.
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then export PATH="$d:$PATH"; echo "$d" >> "$GITHUB_PATH"; break; fi
+        done
+        if ! command -v pod >/dev/null 2>&1; then
+          if ! command -v brew >/dev/null 2>&1; then
+            echo "::error::CocoaPods is not installed on this runner and Homebrew was not found. Install CocoaPods on the Mac Mini for the runner user."
+            exit 1
+          fi
+          brew install cocoapods
+        fi
+        pod --version
 
     - name: Install pods
       run: pod install
@@ -67,6 +83,17 @@ jobs:
       uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
       with:
         xcode-version: ${{ env.XCODE_VERSION }}
+
+    - name: Make sure xcbeautify is available
+      run: |
+        # The self-hosted Mac Mini may not have xcbeautify. Fall back to plain output instead of failing.
+        if ! command -v xcbeautify >/dev/null 2>&1; then
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\ncat\n' > "$RUNNER_TEMP/bin/xcbeautify"
+          chmod +x "$RUNNER_TEMP/bin/xcbeautify"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "xcbeautify not installed on this runner; using plain xcodebuild output"
+        fi
 
     - name: Build (unsigned, simulator SDK)
       run: |

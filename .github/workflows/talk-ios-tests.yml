@@ -23,23 +23,28 @@ permissions:
   contents: read
 
 env:
+  # The self-hosted runner service starts without a locale; CocoaPods crashes on a non-UTF-8 one.
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
   WORKSPACE: NextcloudTalk.xcworkspace
-  DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
+  DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=27.2
   SIMULATOR_MODEL: iPhone 17
-  SIMULATOR_VERSION: "26.5"
+  SIMULATOR_VERSION: "27.2"
   SCHEME: NextcloudTalk
-  XCODE_VERSION: "26.5"
+  XCODE_VERSION: "27.2"
 
 jobs:
   build:
     name: Build
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
       # Workaround for eliminating iOS 17 simulators stalling issue
       # Runs deamon which kills CPU intensive tasks which affects simulator performance
       # See https://github.com/actions/runner-images/issues/11509#issuecomment-2703308482
     - name: Install and run yeetd
+      # Hosted-image workaround; it installs a root daemon, so never on the self-hosted Mac Mini.
+      if: runner.environment == 'github-hosted'
       run: |
         wget https://github.com/biscuitehh/yeetd/releases/download/1.0/yeetd-normal.pkg
         sudo installer -pkg yeetd-normal.pkg -target /
@@ -59,10 +64,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pods-
 
+    # setup-cocoapods uninstalls and reinstalls CocoaPods on every run, which on the
+    # self-hosted Mac Mini would change the machine (and needs root). Use the installed
+    # pod, or install it once through Homebrew (macOS's own Ruby 2.6 is too old for it).
     - name: Setup Cocoapods
-      uses: maxim-lobanov/setup-cocoapods@8e97e1e98e6ccf42564fdf5622c8feec74199377 # v1.4.0
-      with:
-        version: latest      
+      run: |
+        # The runner service's PATH does not include Homebrew; add it for this and later steps.
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then export PATH="$d:$PATH"; echo "$d" >> "$GITHUB_PATH"; break; fi
+        done
+        if ! command -v pod >/dev/null 2>&1; then
+          if ! command -v brew >/dev/null 2>&1; then
+            echo "::error::CocoaPods is not installed on this runner and Homebrew was not found. Install CocoaPods on the Mac Mini for the runner user."
+            exit 1
+          fi
+          brew install cocoapods
+        fi
+        pod --version
 
     - name: Set up dependencies talk-ios
       run: |
@@ -72,6 +90,17 @@ jobs:
       uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
       with:
         xcode-version: ${{ env.XCODE_VERSION }}
+
+    - name: Make sure xcbeautify is available
+      run: |
+        # The self-hosted Mac Mini may not have xcbeautify. Fall back to plain output instead of failing.
+        if ! command -v xcbeautify >/dev/null 2>&1; then
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\ncat\n' > "$RUNNER_TEMP/bin/xcbeautify"
+          chmod +x "$RUNNER_TEMP/bin/xcbeautify"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "xcbeautify not installed on this runner; using plain xcodebuild output"
+        fi
 
     - name: Build NextcloudTalk iOS for testing
       run: |
@@ -92,11 +121,13 @@ jobs:
 
   test:
     name: Test
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64]
     needs: [build]
 
     strategy:
       fail-fast: false
+      # One Mac Mini: run the server configs one after another.
+      max-parallel: 1
       matrix:
         # Test with stable23 as well to find regressions in older versions
         configs: [
@@ -137,6 +168,8 @@ jobs:
       # Runs deamon which kills CPU intensive tasks which affects simulator performance
       # See https://github.com/actions/runner-images/issues/11509#issuecomment-2703308482
     - name: Install and run yeetd
+      # Hosted-image workaround; it installs a root daemon, so never on the self-hosted Mac Mini.
+      if: runner.environment == 'github-hosted'
       run: |
         wget https://github.com/biscuitehh/yeetd/releases/download/1.0/yeetd-normal.pkg
         sudo installer -pkg yeetd-normal.pkg -target /
@@ -149,7 +182,45 @@ jobs:
         persist-credentials: false
         submodules: true
 
+    - name: Put Homebrew on PATH
+      # The runner service's PATH does not include Homebrew, which the PHP setup needs.
+      run: |
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then echo "$d" >> "$GITHUB_PATH"; exit 0; fi
+        done
+        echo "::error::Homebrew was not found on this runner; PHP setup needs it."
+        exit 1
+
+    - name: Set up php ${{ matrix.configs.phpversion }} (self-hosted)
+      # setup-php hides Homebrew's output and failed silently on the Mac Mini VMs.
+      # Install the same PHP builds (shivammathur tap) directly so errors are visible.
+      if: runner.environment != 'github-hosted'
+      run: |
+        V='${{ matrix.configs.phpversion }}'
+        brew tap shivammathur/php
+        brew tap shivammathur/extensions
+        # Earlier jobs leave other PHP versions linked; unlink them so this one can link.
+        for f in $(brew list --formula | grep -E '^php(@[0-9.]+)?$'); do brew unlink "$f" || true; done
+        brew install "shivammathur/php/php@$V" "shivammathur/extensions/apcu@$V"
+        PREFIX="$(brew --prefix "shivammathur/php/php@$V")"
+        echo "$PREFIX/sbin" >> "$GITHUB_PATH"
+        echo "$PREFIX/bin" >> "$GITHUB_PATH"
+        # Composer as a phar: Homebrew's composer pulls in the newest PHP, which clashes with this one.
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -fsSL -o "$RUNNER_TEMP/bin/composer" https://getcomposer.org/download/latest-stable/composer.phar
+        SUM="$(curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar.sha256 | awk '{print $1}')"
+        echo "$SUM  $RUNNER_TEMP/bin/composer" | shasum -a 256 -c -
+        chmod +x "$RUNNER_TEMP/bin/composer"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        SCAN_DIR="$("$PREFIX/bin/php" -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')"
+        printf 'apc.enable_cli=1\ndisable_functions=\n' > "$SCAN_DIR/zz-xenia-ci.ini"
+        "$PREFIX/bin/php" -v
+        for ext in apcu pdo_sqlite sqlite3 intl gd zip mbstring pcntl posix; do
+          "$PREFIX/bin/php" -m | grep -qix "$ext" || { echo "::error::PHP extension $ext is missing"; exit 1; }
+        done
+
     - name: Set up php ${{ matrix.configs.phpversion }}
+      if: runner.environment == 'github-hosted'
       uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
       with:
         php-version: ${{ matrix.configs.phpversion }}
@@ -243,6 +314,8 @@ jobs:
     - name: Test NextcloudTalk iOS
       run: |
         xcrun simctl privacy booted grant camera eu.xeniacloud.talk
+        # The call tests need the microphone; on the iOS 27.2 simulator the prompt blocks "Hang up".
+        xcrun simctl privacy booted grant microphone eu.xeniacloud.talk
 
         set -o pipefail && \
         xcodebuild test-without-building \
@@ -256,9 +329,15 @@ jobs:
     - name: Parse test results with xcresultparser & xctesthtmlreport
       if: ${{ !cancelled() }}
       run: |
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then export PATH="$d:$PATH"; break; fi
+        done
         brew install xcresultparser xctesthtmlreport
-        xcresultparser -o cli testResult.xcresult
-        xchtmlreport -i -z testResult.xcresult
+        # xchtmlreport prints one line per exported attachment; keep that out of the log
+        # so the test summary below stays at the end where it can be read.
+        xchtmlreport -i -z testResult.xcresult > xchtmlreport.log 2>&1 || { tail -50 xchtmlreport.log; exit 1; }
+        xcresultparser -o cli testResult.xcresult | tee test-summary.txt
+        { echo '### Test results (${{ matrix.configs.talkbranch }})'; echo '```'; tail -c 60000 test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
         mv index.html testResults-${{ matrix.configs.talkbranch }}.html        
 
     - name: Upload result page from xchtmlresult

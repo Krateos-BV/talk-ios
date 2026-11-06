@@ -23,7 +23,7 @@ permissions:
 jobs:
   check-localizable:
     name: Check for localizable changes
-    runs-on: macOS-15
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
     - name: Checkout app
@@ -46,6 +46,9 @@ jobs:
 
     - name: Install dependencies
       run: |
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then export PATH="$d:$PATH"; echo "$d" >> "$GITHUB_PATH"; break; fi
+        done
         brew install aspell pyspelling
 
     - name: Spell check
