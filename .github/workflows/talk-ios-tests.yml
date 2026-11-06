@@ -179,6 +179,15 @@ jobs:
         persist-credentials: false
         submodules: true
 
+    - name: Put Homebrew on PATH
+      # The runner service's PATH does not include Homebrew, which setup-php needs on macOS.
+      run: |
+        for d in /opt/homebrew/bin /usr/local/bin; do
+          if [ -x "$d/brew" ]; then echo "$d" >> "$GITHUB_PATH"; exit 0; fi
+        done
+        echo "::error::Homebrew was not found on this runner; setup-php needs it."
+        exit 1
+
     - name: Set up php ${{ matrix.configs.phpversion }}
       uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
       with:
@@ -191,6 +200,8 @@ jobs:
         ini-values: apc.enable_cli=on, disable_functions=
       env:
         fail-fast: true
+        # Tells setup-php it is not on a GitHub image (own tool cache, no hosted-image assumptions).
+        runner: self-hosted
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Checkout server
