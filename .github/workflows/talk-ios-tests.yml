@@ -180,15 +180,35 @@ jobs:
         submodules: true
 
     - name: Put Homebrew on PATH
-      # The runner service's PATH does not include Homebrew, which setup-php needs on macOS.
+      # The runner service's PATH does not include Homebrew, which the PHP setup needs.
       run: |
         for d in /opt/homebrew/bin /usr/local/bin; do
           if [ -x "$d/brew" ]; then echo "$d" >> "$GITHUB_PATH"; exit 0; fi
         done
-        echo "::error::Homebrew was not found on this runner; setup-php needs it."
+        echo "::error::Homebrew was not found on this runner; PHP setup needs it."
         exit 1
 
+    - name: Set up php ${{ matrix.configs.phpversion }} (self-hosted)
+      # setup-php hides Homebrew's output and failed silently on the Mac Mini VMs.
+      # Install the same PHP builds (shivammathur tap) directly so errors are visible.
+      if: runner.environment != 'github-hosted'
+      run: |
+        V='${{ matrix.configs.phpversion }}'
+        brew tap shivammathur/php
+        brew tap shivammathur/extensions
+        brew install "shivammathur/php/php@$V" "shivammathur/extensions/apcu@$V" composer
+        PREFIX="$(brew --prefix "shivammathur/php/php@$V")"
+        echo "$PREFIX/sbin" >> "$GITHUB_PATH"
+        echo "$PREFIX/bin" >> "$GITHUB_PATH"
+        SCAN_DIR="$("$PREFIX/bin/php" -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')"
+        printf 'apc.enable_cli=1\ndisable_functions=\n' > "$SCAN_DIR/zz-xenia-ci.ini"
+        "$PREFIX/bin/php" -v
+        for ext in apcu pdo_sqlite sqlite3 intl gd zip mbstring pcntl posix; do
+          "$PREFIX/bin/php" -m | grep -qix "$ext" || { echo "::error::PHP extension $ext is missing"; exit 1; }
+        done
+
     - name: Set up php ${{ matrix.configs.phpversion }}
+      if: runner.environment == 'github-hosted'
       uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
       with:
         php-version: ${{ matrix.configs.phpversion }}
@@ -200,8 +220,6 @@ jobs:
         ini-values: apc.enable_cli=on, disable_functions=
       env:
         fail-fast: true
-        # Tells setup-php it is not on a GitHub image (own tool cache, no hosted-image assumptions).
-        runner: self-hosted
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Checkout server
