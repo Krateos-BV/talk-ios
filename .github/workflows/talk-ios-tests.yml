@@ -199,10 +199,19 @@ jobs:
         V='${{ matrix.configs.phpversion }}'
         brew tap shivammathur/php
         brew tap shivammathur/extensions
-        brew install "shivammathur/php/php@$V" "shivammathur/extensions/apcu@$V" composer
+        # Earlier jobs leave other PHP versions linked; unlink them so this one can link.
+        for f in $(brew list --formula | grep -E '^php(@[0-9.]+)?$'); do brew unlink "$f" || true; done
+        brew install "shivammathur/php/php@$V" "shivammathur/extensions/apcu@$V"
         PREFIX="$(brew --prefix "shivammathur/php/php@$V")"
         echo "$PREFIX/sbin" >> "$GITHUB_PATH"
         echo "$PREFIX/bin" >> "$GITHUB_PATH"
+        # Composer as a phar: Homebrew's composer pulls in the newest PHP, which clashes with this one.
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -fsSL -o "$RUNNER_TEMP/bin/composer" https://getcomposer.org/download/latest-stable/composer.phar
+        SUM="$(curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar.sha256 | awk '{print $1}')"
+        echo "$SUM  $RUNNER_TEMP/bin/composer" | shasum -a 256 -c -
+        chmod +x "$RUNNER_TEMP/bin/composer"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
         SCAN_DIR="$("$PREFIX/bin/php" -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')"
         printf 'apc.enable_cli=1\ndisable_functions=\n' > "$SCAN_DIR/zz-xenia-ci.ini"
         "$PREFIX/bin/php" -v
