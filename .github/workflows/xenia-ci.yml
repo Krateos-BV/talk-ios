@@ -32,6 +32,9 @@ permissions:
   contents: read
 
 env:
+  # The self-hosted runner service starts without a locale; CocoaPods crashes on a non-UTF-8 one.
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
   WORKSPACE: NextcloudTalk.xcworkspace
   SCHEME: NextcloudTalk
   XCODE_VERSION: "27.2"

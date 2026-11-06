@@ -23,6 +23,9 @@ permissions:
   contents: read
 
 env:
+  # The self-hosted runner service starts without a locale; CocoaPods crashes on a non-UTF-8 one.
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
   WORKSPACE: NextcloudTalk.xcworkspace
   DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=27.2
   SIMULATOR_MODEL: iPhone 17
