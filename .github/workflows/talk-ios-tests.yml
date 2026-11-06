@@ -331,8 +331,11 @@ jobs:
           if [ -x "$d/brew" ]; then export PATH="$d:$PATH"; break; fi
         done
         brew install xcresultparser xctesthtmlreport
-        xcresultparser -o cli testResult.xcresult
-        xchtmlreport -i -z testResult.xcresult
+        # xchtmlreport prints one line per exported attachment; keep that out of the log
+        # so the test summary below stays at the end where it can be read.
+        xchtmlreport -i -z testResult.xcresult > xchtmlreport.log 2>&1 || { tail -50 xchtmlreport.log; exit 1; }
+        xcresultparser -o cli testResult.xcresult | tee test-summary.txt
+        { echo '### Test results (${{ matrix.configs.talkbranch }})'; echo '```'; tail -c 60000 test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
         mv index.html testResults-${{ matrix.configs.talkbranch }}.html        
 
     - name: Upload result page from xchtmlresult
