@@ -24,22 +24,24 @@ permissions:
 
 env:
   WORKSPACE: NextcloudTalk.xcworkspace
-  DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
+  DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=27.2
   SIMULATOR_MODEL: iPhone 17
-  SIMULATOR_VERSION: "26.5"
+  SIMULATOR_VERSION: "27.2"
   SCHEME: NextcloudTalk
-  XCODE_VERSION: "26.5"
+  XCODE_VERSION: "27.2"
 
 jobs:
   build:
     name: Build
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
       # Workaround for eliminating iOS 17 simulators stalling issue
       # Runs deamon which kills CPU intensive tasks which affects simulator performance
       # See https://github.com/actions/runner-images/issues/11509#issuecomment-2703308482
     - name: Install and run yeetd
+      # Hosted-image workaround; it installs a root daemon, so never on the self-hosted Mac Mini.
+      if: runner.environment == 'github-hosted'
       run: |
         wget https://github.com/biscuitehh/yeetd/releases/download/1.0/yeetd-normal.pkg
         sudo installer -pkg yeetd-normal.pkg -target /
@@ -59,10 +61,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pods-
 
+    # setup-cocoapods uninstalls and reinstalls CocoaPods on every run, which on the
+    # self-hosted Mac Mini would change the machine (and needs root). Use the installed
+    # pod, or install it for the runner user only.
     - name: Setup Cocoapods
-      uses: maxim-lobanov/setup-cocoapods@8e97e1e98e6ccf42564fdf5622c8feec74199377 # v1.4.0
-      with:
-        version: latest      
+      run: |
+        if ! command -v pod >/dev/null 2>&1; then
+          gem install --user-install cocoapods --no-document
+          echo "$(ruby -e 'print Gem.user_dir')/bin" >> "$GITHUB_PATH"
+        fi
 
     - name: Set up dependencies talk-ios
       run: |
@@ -72,6 +79,17 @@ jobs:
       uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
       with:
         xcode-version: ${{ env.XCODE_VERSION }}
+
+    - name: Make sure xcbeautify is available
+      run: |
+        # The self-hosted Mac Mini may not have xcbeautify. Fall back to plain output instead of failing.
+        if ! command -v xcbeautify >/dev/null 2>&1; then
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\ncat\n' > "$RUNNER_TEMP/bin/xcbeautify"
+          chmod +x "$RUNNER_TEMP/bin/xcbeautify"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "xcbeautify not installed on this runner; using plain xcodebuild output"
+        fi
 
     - name: Build NextcloudTalk iOS for testing
       run: |
@@ -92,11 +110,13 @@ jobs:
 
   test:
     name: Test
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64]
     needs: [build]
 
     strategy:
       fail-fast: false
+      # One Mac Mini: run the server configs one after another.
+      max-parallel: 1
       matrix:
         # Test with stable23 as well to find regressions in older versions
         configs: [
@@ -137,6 +157,8 @@ jobs:
       # Runs deamon which kills CPU intensive tasks which affects simulator performance
       # See https://github.com/actions/runner-images/issues/11509#issuecomment-2703308482
     - name: Install and run yeetd
+      # Hosted-image workaround; it installs a root daemon, so never on the self-hosted Mac Mini.
+      if: runner.environment == 'github-hosted'
       run: |
         wget https://github.com/biscuitehh/yeetd/releases/download/1.0/yeetd-normal.pkg
         sudo installer -pkg yeetd-normal.pkg -target /
