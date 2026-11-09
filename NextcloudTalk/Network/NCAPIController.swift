@@ -77,10 +77,10 @@ class NCAPIController: NSObject, NKCommonDelegate {
         let configuration = URLSessionConfiguration.default
         configuration.httpCookieStorage = self.getHTTPCookieStorage(forAccountId: accountId)
         let apiSessionManager = NCAPISessionManager(configuration: configuration)
-        apiSessionManager.requestSerializer.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        apiSessionManager.setValue(authHeader, forHTTPHeaderField: "Authorization")
 
         // As we can run max. 30s in the background, the default timeout should be lower than 30 to avoid being killed by the OS
-        apiSessionManager.requestSerializer.timeoutInterval = TimeInterval(25)
+        apiSessionManager.timeoutInterval = TimeInterval(25)
         apiSessionManagers[accountId] = apiSessionManager
 
         return apiSessionManager
@@ -98,7 +98,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
         let longConfiguration = URLSessionConfiguration.default
         longConfiguration.httpCookieStorage = self.getHTTPCookieStorage(forAccountId: accountId)
         let longApiSessionManager = NCAPISessionManager(configuration: longConfiguration)
-        longApiSessionManager.requestSerializer.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        longApiSessionManager.setValue(authHeader, forHTTPHeaderField: "Authorization")
         longPollingApiSessionManagers[accountId] = longApiSessionManager
 
         return longApiSessionManager
@@ -116,7 +116,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
         let calDAVConfiguration = URLSessionConfiguration.default
         calDAVConfiguration.httpCookieStorage = self.getHTTPCookieStorage(forAccountId: accountId)
         let calDAVSessionManager = NCCalDAVSessionManager(configuration: calDAVConfiguration)
-        calDAVSessionManager.requestSerializer.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        calDAVSessionManager.setValue(authHeader, forHTTPHeaderField: "Authorization")
         calDAVSessionManagers[accountId] = calDAVSessionManager
 
         return calDAVSessionManager
@@ -138,7 +138,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
         self.cookieStorages.removeValue(forKey: account.accountId)
     }
 
-    private func authHeader(forAccount account: TalkAccount) -> String? {
+    internal func authHeader(forAccount account: TalkAccount) -> String? {
         if let cachedHeader = self.authTokenCache[account.accountId] {
             return cachedHeader
         }
@@ -277,7 +277,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
             var room: NCRoom?
 
             // Room object is returned only since Talk 11
-            if NCDatabaseManager.sharedInstance().serverHasTalkCapability(.listableRooms) {
+            if NCDatabaseManager.sharedInstance().serverHasTalkCapability(.listableRooms, forAccountId: account.accountId) {
                 room = NCRoom(dictionary: ocsResponse?.dataDict, andAccountId: account.accountId)
 
                 // In case there's no token, or a non-matching token, don't return
@@ -1013,7 +1013,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
             parameters["internalNote"] = internalNote
         }
 
-        apiSessionManager.post(urlString, parameters: parameters, progress: nil) { _, _ in
+        apiSessionManager.post(urlString, parameters: parameters) { _, _ in
             completionBlock(true)
         } failure: { _, _ in
             completionBlock(false)
@@ -1816,10 +1816,10 @@ class NCAPIController: NSObject, NKCommonDelegate {
 
         let configuration = URLSessionConfiguration.default
         let apiSessionManager = NCAPISessionManager(configuration: configuration)
-        apiSessionManager.requestSerializer.setValue(authHeader, forHTTPHeaderField: "Authorization")
-        apiSessionManager.requestSerializer.setValue(NCAppBranding.userAgentForLogin(), forHTTPHeaderField: "User-Agent")
+        apiSessionManager.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        apiSessionManager.setValue(NCAppBranding.userAgentForLogin(), forHTTPHeaderField: "User-Agent")
 
-        _ = apiSessionManager.get(appPasswordRoute, parameters: nil, progress: nil) { _, result in
+        _ = apiSessionManager.get(appPasswordRoute, parameters: nil) { _, result in
             if let resultDict = result as? [String: AnyObject],
                let ocs = resultDict["ocs"] as? [String: AnyObject],
                let data = ocs["data"] as? [String: AnyObject],
@@ -2168,11 +2168,11 @@ class NCAPIController: NSObject, NKCommonDelegate {
 
         switch action.actionType {
         case .kNotificationActionTypeGet:
-            apiSessionManager.get(actionLink, parameters: nil, progress: nil, success: success, failure: failure)
+            apiSessionManager.get(actionLink, parameters: nil, success: success, failure: failure)
         case .kNotificationActionTypePut:
             apiSessionManager.put(actionLink, parameters: nil, success: success, failure: failure)
         case .kNotificationActionTypePost:
-            apiSessionManager.post(actionLink, parameters: nil, progress: nil, success: success, failure: failure)
+            apiSessionManager.post(actionLink, parameters: nil, success: success, failure: failure)
         case .kNotificationActionTypeDelete:
             apiSessionManager.delete(actionLink, parameters: nil, success: success, failure: failure)
         default:
@@ -2254,7 +2254,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
             if let contactsDict = ocsResponse?.dataArrayDict {
                 let contacts = contactsDict
                     .compactMap( { NCUser(dictionary: $0) })
-                    .filter({ !($0.userId == account.userId && $0.source as String == kParticipantTypeUser) })
+                    .filter({ !($0.userId == account.userId && $0.source == kParticipantTypeUser) })
 
                 completionBlock(contacts, ocsError)
             } else {
@@ -2281,7 +2281,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
             if let contactsDict = ocsResponse?.dataArrayDict {
                 let contacts = contactsDict
                     .compactMap( { NCUser(dictionary: $0) })
-                    .filter({ !($0.userId == account.userId && $0.source as String == kParticipantTypeUser) })
+                    .filter({ !($0.userId == account.userId && $0.source == kParticipantTypeUser) })
 
                 completionBlock(contacts, ocsError)
             } else {
@@ -2550,10 +2550,11 @@ class NCAPIController: NSObject, NKCommonDelegate {
 
     // MARK: - Push Notifications
 
-    public func subscribeAccount(_ account: TalkAccount, withPublicKey publicKey: Data, toNextcloudServerWithCompletionBlock completionBlock: @escaping (_ responseDict: [String: Any]?, _ error: OcsError?) -> Void) {
+    @nonobjc
+    public func registerDevice(forAccount account: TalkAccount, withPublicKey publicKey: Data) async throws -> PushDeviceRegistration {
         guard let apiSessionManager = self.getAPISessionManager(forAccountId: account.accountId),
               let devicePublicKey = String(data: publicKey, encoding: .utf8)
-        else { return }
+        else { throw ApiControllerError.preconditionError }
 
         let urlString = "\(account.server)/ocs/v2.php/apps/notifications/api/v2/push"
         let parameters = [
@@ -2562,14 +2563,21 @@ class NCAPIController: NSObject, NKCommonDelegate {
             "proxyServer": pushNotificationServer
         ]
 
-        apiSessionManager.postOcs(urlString, account: account, parameters: parameters) { ocsResponse, ocsError in
-            completionBlock(ocsResponse?.dataDict, ocsError)
-        }
+        let ocsResponse = try await apiSessionManager.postOcs(urlString, account: account, parameters: parameters)
+
+        guard let registration = PushDeviceRegistration(dataDict: ocsResponse.dataDict)
+        else { throw ApiControllerError.unexpectedOcsResponse }
+
+        return registration
     }
 
-    public func unsubscribeAccount(_ account: TalkAccount, fromNextcloudServerWithCompletionBlock completionBlock: @escaping (_ error: OcsError?) -> Void) {
+    @nonobjc
+    public func unregisterDevice(forAccount account: TalkAccount, completionBlock: @escaping (_ error: OcsError?) -> Void) {
         guard let apiSessionManager = self.getAPISessionManager(forAccountId: account.accountId)
-        else { return }
+        else {
+            completionBlock(OcsError.genericError())
+            return
+        }
 
         let urlString = "\(account.server)/ocs/v2.php/apps/notifications/api/v2/push"
 
@@ -2578,28 +2586,32 @@ class NCAPIController: NSObject, NKCommonDelegate {
         }
     }
 
-    public func subscribeAccount(_ account: TalkAccount, toPushServerWithCompletionBlock completionBlock: @escaping (_ error: Error?) -> Void) {
+    @nonobjc
+    public func registerDevice(_ registration: PushDeviceRegistration, atPushProxyWithPushToken pushToken: String) async throws {
         let urlString = "\(pushNotificationServer)/devices"
         let parameters = [
-            "pushToken": NCKeyChainController.sharedInstance().combinedPushToken(),
-            "deviceIdentifier": account.deviceIdentifier,
-            "deviceIdentifierSignature": account.deviceSignature,
-            "userPublicKey": account.userPublicKey
+            "pushToken": pushToken,
+            "deviceIdentifier": registration.deviceIdentifier,
+            "deviceIdentifierSignature": registration.signature,
+            "userPublicKey": registration.userPublicKey
         ]
 
-        NCPushProxySessionManager.shared.post(urlString, parameters: parameters, progress: nil) { _, _ in
-            completionBlock(nil)
-        } failure: { _, error in
-            completionBlock(error)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            NCPushProxySessionManager.shared.post(urlString, parameters: parameters) { _, _ in
+                continuation.resume()
+            } failure: { _, error in
+                continuation.resume(throwing: error)
+            }
         }
     }
 
-    public func unsubscribeAccount(_ account: TalkAccount, fromPushServerWithCompletionBlock completionBlock: @escaping (_ error: Error?) -> Void) {
+    @nonobjc
+    public func unregisterDevice(_ registration: PushDeviceRegistration, fromPushProxyWithCompletionBlock completionBlock: @escaping (_ error: Error?) -> Void) {
         let urlString = "\(pushNotificationServer)/devices"
         let parameters = [
-            "deviceIdentifier": account.deviceIdentifier,
-            "deviceIdentifierSignature": account.deviceSignature,
-            "userPublicKey": account.userPublicKey
+            "deviceIdentifier": registration.deviceIdentifier,
+            "deviceIdentifierSignature": registration.signature,
+            "userPublicKey": registration.userPublicKey
         ]
 
         NCPushProxySessionManager.shared.delete(urlString, parameters: parameters) { _, _ in
@@ -2644,7 +2656,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
     public func getAppStoreAppId(withCompletionBlock completionBlock: @escaping (_ appId: String?, _ error: Error?) -> Void) {
         let urlString = "http://itunes.apple.com/lookup?bundleId=\(bundleIdentifier)"
 
-        defaultAPISessionManager.get(urlString, parameters: nil, progress: nil, success: { _, responseObject in
+        defaultAPISessionManager.get(urlString, parameters: nil, success: { _, responseObject in
             if let responseDict = responseObject as? [String: Any], let results = responseDict["results"] as? [[String: Any]], let firstResult = results.first {
                 if let trackId = firstResult["trackId"] as? Int {
                     completionBlock(String(trackId), nil)
@@ -2672,6 +2684,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
                                     lastCommonReadMessage: Int,
                                     setReadMarker: Bool,
                                     markNotificationsAsRead: Bool,
+                                    updateStatus: Bool = true,
                                     forAccount account: TalkAccount,
                                     completionBlock: @escaping (_ messages: [[String: Any]]?, _ lastKnownMessage: Int, _ lastCommonReadMessage: Int, _ error: OcsError?, _ statusCode: Int) -> Void) -> URLSessionDataTask? {
 
@@ -2696,6 +2709,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
             "setReadMarker": setReadMarker ? 1 : 0,
             "includeLastKnown": includeLastMessage ? 1 : 0,
             "markNotificationsAsRead": markNotificationsAsRead ? 1 : 0,
+            "noStatusUpdate": updateStatus ? 0 : 1,
             "threadId": threadId
         ]
 
@@ -2874,7 +2888,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
                 var result: [String: [NCChatMessage]] = [:]
 
                 for (key, value) in dataDict {
-                    result[key] = value.compactMap({ NCChatMessage(dictionary: $0) })
+                    result[key] = value.compactMap({ NCChatMessage(dictionary: $0, andAccountId: account.accountId) })
                 }
 
                 completionBlock(result, nil)
@@ -2908,7 +2922,7 @@ class NCAPIController: NSObject, NKCommonDelegate {
         return apiSessionManager.getOcs(urlString, account: account, parameters: parameters) { ocsResponse, ocsError in
             if let dataDict = ocsResponse?.dataDict as? [String: [String: Any]] {
                 let headerLastKnownMessage = Int(ocsResponse?.value(forHTTPHeaderField: "x-chat-last-given")) ?? -1
-                completionBlock(dataDict.compactMap({ NCChatMessage(dictionary: $0.value) }), headerLastKnownMessage, nil)
+                completionBlock(dataDict.compactMap({ NCChatMessage(dictionary: $0.value, andAccountId: account.accountId) }), headerLastKnownMessage, nil)
             } else {
                 completionBlock(nil, -1, ocsError)
             }
@@ -3428,9 +3442,8 @@ class NCAPIController: NSObject, NKCommonDelegate {
 
         let urlString = "\(account.server)/ocs/v2.php/apps/spreed/temp-user-avatar"
 
-        apiSessionManager.post(urlString, parameters: nil) { formData in
+        apiSessionManager.post(urlString) { formData in
             formData.appendPart(withFileData: imageData, name: "files[]", fileName: "avatar.jpg", mimeType: "image/jpeg")
-        } progress: { _ in
         } success: { _, _ in
             completionBlock(nil)
         } failure: { _, error in
@@ -3715,9 +3728,8 @@ class NCAPIController: NSObject, NKCommonDelegate {
         let endpoint = "room/\(encodedToken)/avatar"
         let urlString = self.getRequestURL(forEndpoint: endpoint, withAPIType: .avatar, forAccount: account)
 
-        apiSessionManager.post(urlString, parameters: nil) { formData in
+        apiSessionManager.post(urlString) { formData in
             formData.appendPart(withFileData: imageData, name: "file", fileName: "avatar.jpg", mimeType: "image/jpeg")
-        } progress: { _ in
         } success: { _, _ in
             completionBlock(nil)
         } failure: { _, error in

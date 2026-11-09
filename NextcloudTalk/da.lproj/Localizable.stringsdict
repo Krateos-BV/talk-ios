@@ -34,6 +34,22 @@
 			<string>%d stemmer</string>
 		</dict>
 	</dict>
+	<key>%ld files failed to send</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@files@</string>
+		<key>files</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>%ld fil kunne ikke sendes</string>
+			<key>other</key>
+			<string>%ld filer kunne ikke sendes</string>
+		</dict>
+	</dict>
 	<key>%ld participants</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -77,9 +93,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%n minut siden</string>
+			<string>%d minut siden</string>
 			<key>other</key>
-			<string>%n minutter siden</string>
+			<string>%d minutter siden</string>
 		</dict>
 	</dict>
 	<key>%d hours ago</key>
@@ -93,9 +109,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%n timer siden</string>
+			<string>%d time siden</string>
 			<key>other</key>
-			<string>%n timer siden</string>
+			<string>%d timer siden</string>
 		</dict>
 	</dict>
 	<key>%d days ago</key>
@@ -109,9 +125,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%n dag siden</string>
+			<string>%d dag siden</string>
 			<key>other</key>
-			<string>%n dage siden</string>
+			<string>%d dage siden</string>
 		</dict>
 	</dict>
 	<key>%ld notifications</key>
@@ -125,7 +141,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>ld</string>
 			<key>one</key>
-			<string>%ld notifikationer</string>
+			<string>%ld notifikation</string>
 			<key>other</key>
 			<string>%ld notifikationer</string>
 		</dict>
@@ -141,7 +157,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>ld</string>
 			<key>one</key>
-			<string>Du har %ld afventende invitationer</string>
+			<string>Du har %ld afventende invitation</string>
 			<key>other</key>
 			<string>Du har %ld afventende invitationer</string>
 		</dict>
@@ -157,9 +173,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>%d muligheder</string>
+			<string>%d valgmulighed</string>
 			<key>other</key>
-			<string>%d muligheder</string>
+			<string>%d valgmuligheder</string>
 		</dict>
 	</dict>
 	<key>This conversation will be automatically deleted for everyone in %ld days of no activity.</key>
