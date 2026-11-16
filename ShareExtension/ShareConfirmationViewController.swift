@@ -492,6 +492,9 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
     public override func viewDidLoad() {
         super.viewDidLoad()
 
+        // Lets UI tests tell this inputbar apart from the chat's behind it
+        self.view.accessibilityIdentifier = "ShareConfirmationView"
+
         // Thumbnails are generated at the display scale, so they have to be regenerated when it changes.
         // Registered before the token guard below, which can return early.
         if #available(iOS 17.0, *) {
@@ -810,10 +813,13 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
 
         NCIntentController.sharedInstance().donateSendMessageIntent(for: self.room)
 
+        let uploadingText = String.localizedStringWithFormat(NSLocalizedString("Uploading %ld elements", comment: ""), self.shareItemController.shareItems.count)
+
         self.hud = MBProgressHUD.showAdded(to: self.view, animated: true)
         // Compressing the images happens before there is any progress to report
         self.hud?.mode = .indeterminate
-        self.hud?.label.text = String.localizedStringWithFormat(NSLocalizedString("Uploading %ld elements", comment: ""), self.shareItemController.shareItems.count)
+        // In the background, the upload itself happens after the sheet closed
+        self.hud?.label.text = self.room.supportsConversationSubfolders ? NSLocalizedString("Preparing upload", comment: "Files are prepared for being uploaded in the background") : uploadingText
 
         // Add caption to last shareItem
         if let shareItem = self.shareItemController.shareItems.last {
@@ -824,6 +830,8 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
                 message.messageParametersJSONString = messageParameters
 
                 shareItem.caption = message.sendingMessage
+                shareItem.captionMessage = message.message
+                shareItem.captionMessageParameters = messageParameters
             }
         }
 
@@ -834,6 +842,18 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
 
             let uploads = await self.uploads(for: shareItems, quality: self.imageQuality)
 
+            // The chat shows pending uploads, so the app does not wait for them either
+            if self.room.supportsConversationSubfolders {
+                do {
+                    try await ChatBackgroundUploader.shared.enqueue(uploads)
+                    self.finishUploads(withErrors: [], succeededItems: shareItems)
+                    return
+                } catch {
+                    NCLog.log("Could not start the background upload, uploading right away. Error: \(error.localizedDescription)")
+                }
+            }
+
+            self.hud?.label.text = uploadingText
             self.hud?.mode = .annularDeterminate
 
             let results: [Result<Void, Error>]
@@ -870,12 +890,17 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
     /// Builds the uploads for the items to share, compressing the images among them when the
     /// standard quality is asked for.
     internal func uploads(for shareItems: [ShareItem], quality: ChatImageQuality) async -> [ChatFileUpload] {
+        // Everything shared in one go belongs to the same upload
+        let uploadId = UUID().uuidString
+
         guard quality == .standard,
               let directory = ChatImageCompressor.temporaryDirectory()
         else {
             NCLog.log("Sharing \(shareItems.count) files in their original quality")
 
-            return shareItems.map { self.upload(for: $0) }
+            return shareItems.enumerated().map { index, shareItem in
+                self.upload(for: shareItem, inUpload: uploadId, at: index)
+            }
         }
 
         // Only the plain values are handed to the compression, so it does not touch the share items
@@ -907,11 +932,14 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
         self.compressedImagesDirectory = directory
 
         return shareItems.enumerated().map { index, shareItem in
-            self.upload(for: shareItem, compressedTo: compressedImages[index])
+            self.upload(for: shareItem, inUpload: uploadId, at: index, compressedTo: compressedImages[index])
         }
     }
 
-    private func upload(for shareItem: ShareItem, compressedTo compressedImage: (url: URL, fileName: String)? = nil) -> ChatFileUpload {
+    private func upload(for shareItem: ShareItem,
+                        inUpload uploadId: String,
+                        at index: Int,
+                        compressedTo compressedImage: (url: URL, fileName: String)? = nil) -> ChatFileUpload {
         var metaData = ChatFileUploadMetadata()
         metaData.caption = shareItem.caption
         metaData.silent = self.shareSilently
@@ -923,6 +951,9 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
                                     account: self.account)
         upload.metadata = metaData
         upload.allowUpdate = self.allowUpdate
+        upload.referenceId = ChatFileUpload.referenceId(uploadId: uploadId, index: index)
+        upload.captionMessage = shareItem.captionMessage
+        upload.captionMessageParameters = shareItem.captionMessageParameters
 
         return upload
     }
@@ -1259,7 +1290,7 @@ private let kShareConfirmationOptionsViewHeight: CGFloat = 44
 
     public func authenticationChallenge(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         // The pinning check
-        if CCCertificate.sharedManager().checkTrustedChallenge(challenge) {
+        if NCCertificate.shared.checkTrustedChallenge(challenge) {
             completionHandler(.useCredential, URLCredential(trust: challenge.protectionSpace.serverTrust!))
         } else {
             completionHandler(.performDefaultHandling, nil)

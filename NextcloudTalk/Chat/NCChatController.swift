@@ -12,7 +12,7 @@ public extension NSNotification.Name {
     static let NCChatControllerDidReceiveChatMessages = NSNotification.Name("NCChatControllerDidReceiveChatMessagesNotification")
     static let NCChatControllerDidSendChatMessage = NSNotification.Name("NCChatControllerDidSendChatMessageNotification")
     static let NCChatControllerDidReceiveChatBlocked = NSNotification.Name("NCChatControllerDidReceiveChatBlockedNotification")
-    static let NCChatControllerDidReceiveNewerCommonReadMessage = NSNotification.Name("NCChatControllerDidReceiveNewerCommonReadMessageNotification")
+    static let NCChatControllerDidReceiveDifferentCommonReadMessage = NSNotification.Name("NCChatControllerDidReceiveDifferentCommonReadMessageNotification")
     static let NCChatControllerDidReceiveUpdateMessage = NSNotification.Name("NCChatControllerDidReceiveUpdateMessageNotification")
     static let NCChatControllerDidReceiveHistoryCleared = NSNotification.Name("NCChatControllerDidReceiveHistoryClearedNotification")
     static let NCChatControllerDidReceiveCallStartedMessage = NSNotification.Name("NCChatControllerDidReceiveCallStartedMessageNotification")
@@ -294,6 +294,10 @@ public class NCChatController: NSObject {
         }
     }
 
+    func messageExists(_ messageId: Int) -> Bool {
+        return NCChatMessage.object(forPrimaryKey: "\(account.accountId)@\(room.token ?? "")@\(messageId)") != nil
+    }
+
     private func updateChatBlocks(withLastKnown lastKnown: Int) {
         if lastKnown <= 0 {
             return
@@ -341,10 +345,11 @@ public class NCChatController: NSObject {
         }
     }
 
-    private func updateChatBlocks(withReceivedMessages messages: [[String: Any]]?, newestKnown: Int, andLastKnown lastKnown: Int) {
+    func updateChatBlocks(withReceivedMessages messages: [[String: Any]]?, newestKnown: Int, andLastKnown lastKnown: Int) {
         let sortedMessages = sortedMessages(fromMessageArray: messages)
         let newestMessageReceived = sortedMessages.last
-        let newestMessageKnown = newestKnown > 0 ? newestKnown : (newestMessageReceived?.messageId ?? 0)
+        // newestKnown is the server read marker, which older servers don't validate, so prefer what was actually received (#2760)
+        let newestMessageKnown = newestMessageReceived?.messageId ?? max(0, newestKnown)
         // Safety check: prevent storing a messageId older than the thread's first message as block's oldestMessageId when in a thread controller
         let oldestMessageKnown = (isThreadController && lastKnown < threadId) ? threadId : lastKnown
 
@@ -593,7 +598,7 @@ public class NCChatController: NSObject {
         }
 
         if message.systemMessage == "reaction" || message.systemMessage == "reaction_revoked" || message.systemMessage == "reaction_deleted" {
-            handleReactionRelayMessage(message, withDict: messageDict, lastNewestMessageId: lastNewestMessageId)
+            storeRelayMessage(message, storableDict: messageDict, lastNewestMessageId: lastNewestMessageId)
             return
         }
 
@@ -649,7 +654,7 @@ public class NCChatController: NSObject {
     // notification and the read marker stay in sync.
     private func storeRelayMessage(_ message: NCChatMessage, storableDict: [String: Any], lastNewestMessageId: Int) {
         updateLastChatBlock(withNewestKnown: message.messageId)
-        storeMessages([storableDict])
+        storeMessages([keepingStoredReactionsSelf(in: storableDict, for: message)])
         checkForNewMessages(fromMessageId: lastNewestMessageId)
 
         // We only reach this point while the chat relay is active (these methods are only called in the
@@ -719,36 +724,54 @@ public class NCChatController: NSObject {
         return messageDict
     }
 
-    // Handles reaction system messages received via the chat relay. The relay broadcasts reactionsSelf
-    // from the actor's perspective (not per-user), so we replace it with the correct value computed
-    // from the current DB state plus the self-actor delta before passing to storeMessages — mirroring
-    // the web's fromRealtime reactionsSelf computation in messagesStore.js (PR #16349).
-    private func handleReactionRelayMessage(_ message: NCChatMessage, withDict messageDict: [String: Any], lastNewestMessageId: Int) {
-        var storableDict = messageDict
+    // The relay never carries reactionsSelf, as it differs per attendee, so storing a relayed message or its
+    // parent as-is would drop our own reactions. Keep the stored ones, and add or remove the emoji of our own
+    // reaction events.
+    private func keepingStoredReactionsSelf(in messageDict: [String: Any], for message: NCChatMessage) -> [String: Any] {
+        var messageDict = messageDict
 
-        if var parentDict = messageDict["parent"] as? [String: Any] {
-            var selfReactions: [String] = []
-            if let parentId = message.parentId,
-               let parentInDB = NCChatMessage.objects(where: "internalId = %@", parentId).firstObject() as? NCChatMessage,
-               let jsonString = parentInDB.reactionsSelfJSONString, !jsonString.isEmpty,
-               let data = jsonString.data(using: .utf8),
-               let parsed = try? JSONSerialization.jsonObject(with: data) as? [String] {
-                selfReactions = parsed
-            }
+        if let reactionsSelf = storedReactionsSelf(ofMessageWithInternalId: message.internalId) {
+            messageDict["reactionsSelf"] = reactionsSelf
+        }
+
+        guard var parentDict = messageDict["parent"] as? [String: Any] else { return messageDict }
+
+        var parentReactionsSelf = storedReactionsSelf(ofMessageWithInternalId: message.parentId)
+
+        if message.systemMessage == "reaction" || message.systemMessage == "reaction_revoked" || message.systemMessage == "reaction_deleted" {
+            // Also when the parent isn't stored yet, so our own reaction is still marked on it
+            var ownReactions = parentReactionsSelf ?? []
 
             if message.isMessage(from: account.userId), let emoji = message.message, !emoji.isEmpty {
-                if message.systemMessage == "reaction" && !selfReactions.contains(emoji) {
-                    selfReactions.append(emoji)
+                if message.systemMessage == "reaction", !ownReactions.contains(emoji) {
+                    ownReactions.append(emoji)
                 } else if message.systemMessage == "reaction_revoked" {
-                    selfReactions.removeAll { $0 == emoji }
+                    ownReactions.removeAll { $0 == emoji }
                 }
             }
 
-            parentDict["reactionsSelf"] = selfReactions
-            storableDict["parent"] = parentDict
+            parentReactionsSelf = ownReactions
         }
 
-        storeRelayMessage(message, storableDict: storableDict, lastNewestMessageId: lastNewestMessageId)
+        if let parentReactionsSelf {
+            parentDict["reactionsSelf"] = parentReactionsSelf
+            messageDict["parent"] = parentDict
+        }
+
+        return messageDict
+    }
+
+    /// nil when the message isn't stored, empty when it is but has none of our reactions
+    private func storedReactionsSelf(ofMessageWithInternalId internalId: String?) -> [String]? {
+        guard let internalId,
+              let storedMessage = NCChatMessage.objects(where: "internalId = %@", internalId).firstObject() as? NCChatMessage
+        else { return nil }
+
+        guard let data = storedMessage.reactionsSelfJSONString?.data(using: .utf8),
+              let reactionsSelf = try? JSONSerialization.jsonObject(with: data) as? [String]
+        else { return [] }
+
+        return reactionsSelf
     }
 
     @objc private func didReconnectExternalSignaling(_ notification: Notification) {
@@ -808,7 +831,7 @@ public class NCChatController: NSObject {
             self.pullMessagesTask?.cancel()
         }
 
-        pullMessagesTask = NCAPIController.sharedInstance().receiveChatMessages(ofRoom: room.token, fromLastMessageId: lastChatBlock?.newestMessageId ?? 0, inThread: threadId, history: false, includeLastMessage: false, timeout: false, limit: NCAPIController.shared.kReceivedChatMessagesLimit, lastCommonReadMessage: room.lastCommonReadMessage, setReadMarker: false, markNotificationsAsRead: false, forAccount: account) { messages, lastKnownMessage, lastCommonReadMessage, error, _ in
+        pullMessagesTask = NCAPIController.sharedInstance().receiveChatMessages(ofRoom: room.token, fromLastMessageId: lastChatBlock?.newestMessageId ?? 0, inThread: threadId, history: false, includeLastMessage: false, timeout: false, limit: NCAPIController.shared.kReceivedChatMessagesLimit, lastCommonReadMessage: room.lastCommonReadMessage, setReadMarker: false, markNotificationsAsRead: false, updateStatus: false, prefetch: true, forAccount: account) { messages, lastKnownMessage, lastCommonReadMessage, error, _ in
             if expired {
                 completion?(error)
                 bgTask.stopBackgroundTask()
@@ -1042,7 +1065,9 @@ public class NCChatController: NSObject {
                 // For initial chat history: make sure messageId is inside the last chat block
                 canUseLocalStorage = lastChatBlock.newestMessageId > 0 &&
                                      messageId >= lastChatBlock.oldestMessageId &&
-                                     lastChatBlock.newestMessageId >= messageId
+                                     lastChatBlock.newestMessageId >= messageId &&
+                                     // A block ending beyond the stored messages (#2760) must be corrected by the server history
+                                     messageExists(lastChatBlock.newestMessageId)
             } else {
                 // For history batch: just make sure messageId is newer than last chat block's oldest message
                 canUseLocalStorage = lastChatBlock.newestMessageId > 0 &&
@@ -1367,19 +1392,19 @@ public class NCChatController: NSObject {
         }
     }
 
-    private func checkLastCommonReadMessage(_ lastCommonReadMessage: Int) {
+    func checkLastCommonReadMessage(_ lastCommonReadMessage: Int) {
         guard lastCommonReadMessage > 0 else { return }
 
-        let newerCommonReadReceived = lastCommonReadMessage > self.room.lastCommonReadMessage
+        let differentCommonReadReceived = lastCommonReadMessage != self.room.lastCommonReadMessage
 
-        if newerCommonReadReceived {
+        if differentCommonReadReceived {
             self.room.lastCommonReadMessage = lastCommonReadMessage
             NCRoomsManager.shared.updateLastCommonReadMessage(lastCommonReadMessage, forRoom: self.room)
 
             var userInfo: [AnyHashable: Any] = [:]
             userInfo["room"] = self.room.token
             userInfo["lastCommonReadMessage"] = lastCommonReadMessage
-            NotificationCenter.default.post(name: .NCChatControllerDidReceiveNewerCommonReadMessage, object: self, userInfo: userInfo)
+            NotificationCenter.default.post(name: .NCChatControllerDidReceiveDifferentCommonReadMessage, object: self, userInfo: userInfo)
         }
     }
 
