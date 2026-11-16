@@ -5,13 +5,14 @@
 
 import Foundation
 
-@objcMembers public class OcsError: NSObject, CustomNSError {
+@objcMembers public class OcsError: NSObject, CustomNSError, LocalizedError {
 
     let underlyingError: NSError
+    private let responseError: NCHTTPResponseError?
     let task: URLSessionDataTask?
 
     lazy var responseDict: [String: AnyObject]? = {
-        guard let errorData = underlyingError.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey] as? Data,
+        guard let errorData = responseError?.data,
               let errorDict = try? JSONSerialization.jsonObject(with: errorData) as? [AnyHashable: Any]
         else { return nil }
 
@@ -47,12 +48,18 @@ import Foundation
         return [ "ocsError": self ]
     }
 
+    // Without this, localizedDescription is the generic "(NextcloudTalk.OcsError error 1.)"
+    public var errorDescription: String? {
+        return underlyingError.localizedDescription
+    }
+
     public override var description: String {
         return underlyingError.description
     }
 
-    init(withError error: NSError, withTask task: URLSessionDataTask?) {
-        self.underlyingError = error
+    init(withError error: Error, withTask task: URLSessionDataTask?) {
+        self.underlyingError = error as NSError
+        self.responseError = error as? NCHTTPResponseError
         self.task = task
     }
 

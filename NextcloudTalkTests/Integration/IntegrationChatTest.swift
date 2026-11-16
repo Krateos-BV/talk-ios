@@ -252,6 +252,45 @@ final class IntegrationChatTest: TestBase {
         await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
     }
 
+    func testReceiveMessagesAfterClearedHistory() async throws {
+        try skipWithoutCapability(capability: TalkCapability.clearHistory)
+        try skipWithoutCapability(capability: TalkCapability.chatReadStatus)
+        // Talk 20 is when clearing started resetting read markers to -2 instead of 0, no dedicated capability
+        try skipWithoutCapability(capability: TalkCapability.archivedConversationsV2)
+
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+
+        let room = try await createUniqueRoom(prefix: "Cleared history receive room", withAccount: activeAccount)
+        try await sendMessage(message: "Before clear history Message", inRoom: room.token, withAccount: activeAccount)
+
+        let exp = expectation(description: "\(#function)\(#line)")
+
+        // Clearing resets every read marker to -2, so the server reports a negative common read marker
+        NCAPIController.sharedInstance().clearChatHistory(inRoom: room.token, forAccount: activeAccount) { message, error in
+            XCTAssertNil(error)
+            let historyClearedMessage = NCChatMessage(dictionary: message)!
+
+            NCAPIController.sharedInstance().getRooms(forAccount: activeAccount, updateStatus: false, modifiedSince: 0) { roomsDict, error in
+                XCTAssertNil(error)
+
+                let rooms = self.getRoomDict(from: roomsDict!, for: activeAccount)
+                let foundRoom = rooms.first(where: { $0.token == room.token })!
+
+                // Otherwise the request below passes without checking anything
+                XCTAssertLessThan(foundRoom.lastCommonReadMessage, 0)
+
+                // Passed on as the app does when polling, newer servers answer a negative value with 400 (#2720)
+                NCAPIController.sharedInstance().receiveChatMessages(ofRoom: room.token, fromLastMessageId: historyClearedMessage.messageId, inThread: 0, history: false, includeLastMessage: false, timeout: false, limit: 0, lastCommonReadMessage: foundRoom.lastCommonReadMessage, setReadMarker: false, markNotificationsAsRead: false, forAccount: activeAccount) { _, _, _, _, statusCode in
+                    XCTAssertEqual(statusCode, 304)
+
+                    exp.fulfill()
+                }
+            }
+        }
+
+        await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
+    }
+
     func testShareRichObject() async throws {
         try skipWithoutCapability(capability: TalkCapability.locationSharing)
 
@@ -351,4 +390,112 @@ final class IntegrationChatTest: TestBase {
         await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
     }
 
+    // MARK: - Request encoding
+
+    // Characters that need escaping in a form body, "+" would be decoded as a space by PHP if left unescaped
+    static let specialCharacters = "C++ & a=b ?/:@ #50% [x] 'q' \"d\" é 😀\nnew line"
+
+    func testSendMessageWithSpecialCharacters() async throws {
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+        let room = try await createUniqueRoom(prefix: "Special Characters Room", withAccount: activeAccount)
+
+        // The helper only finds the message if the server stored the exact text
+        let (message, _) = try await sendMessage(message: Self.specialCharacters, inRoom: room.token, withAccount: activeAccount)
+        XCTAssertEqual(message.message, Self.specialCharacters)
+    }
+
+    func testSendSilentMessage() async throws {
+        try skipWithoutCapability(capability: TalkCapability.silentSend)
+
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+        let room = try await createUniqueRoom(prefix: "Silent Message Room", withAccount: activeAccount)
+        let chatMessage = "Silent message \(UUID().uuidString)"
+
+        let exp = expectation(description: "\(#function)\(#line)")
+
+        NCAPIController.sharedInstance().sendChatMessage(chatMessage, toRoom: room.token, threadTitle: "", replyTo: 0, referenceId: "", silently: true, forAccount: activeAccount) { error in
+            XCTAssertNil(error)
+
+            NCAPIController.sharedInstance().receiveChatMessages(ofRoom: room.token, fromLastMessageId: 0, inThread: 0, history: false, includeLastMessage: true, timeout: false, limit: 0, lastCommonReadMessage: 0, setReadMarker: false, markNotificationsAsRead: false, forAccount: activeAccount) { messages, _, _, error, _ in
+                XCTAssertNil(error)
+
+                let message = messages?
+                    .compactMap { NCChatMessage(dictionary: $0, andAccountId: activeAccount.accountId) }
+                    .first { $0.message == chatMessage }
+
+                XCTAssertNotNil(message)
+                XCTAssertTrue(message?.isSilent ?? false)
+
+                exp.fulfill()
+            }
+        }
+
+        await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
+    }
+
+    func testMessageReactionInQuery() async throws {
+        try skipWithoutCapability(capability: TalkCapability.reactions)
+
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+        let room = try await createUniqueRoom(prefix: "Reaction Query Room", withAccount: activeAccount)
+        let (message, _) = try await sendMessage(message: "React with a skin tone", inRoom: room.token, withAccount: activeAccount)
+
+        // Multiple code points, sent in the body when adding and in the query when filtering or removing
+        let reaction = "👍🏽"
+
+        let exp = expectation(description: "\(#function)\(#line)")
+
+        NCAPIController.sharedInstance().addReaction(reaction, toMessage: message.messageId, inRoom: room.token, forAccount: activeAccount) { reactionsDict, error in
+            XCTAssertNil(error)
+            XCTAssertNotNil(reactionsDict?[reaction])
+
+            NCAPIController.sharedInstance().getReactions(reaction, fromMessage: message.messageId, inRoom: room.token, forAccount: activeAccount) { reactionsDict, error in
+                XCTAssertNil(error)
+                XCTAssertNotNil(reactionsDict?[reaction])
+
+                NCAPIController.sharedInstance().removeReaction(reaction, fromMessage: message.messageId, inRoom: room.token, forAccount: activeAccount) { reactionsDict, error in
+                    XCTAssertNil(error)
+                    XCTAssertNil(reactionsDict?[reaction])
+
+                    exp.fulfill()
+                }
+            }
+        }
+
+        await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
+    }
+
+    func testPollWithArrayParameters() async throws {
+        try skipWithoutCapability(capability: TalkCapability.talkPolls)
+
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+        let room = try await createUniqueRoom(prefix: "Poll Room", withAccount: activeAccount)
+        let options = ["C++", "a & b = c", "👍🏽 ü", "1"]
+
+        let exp = expectation(description: "\(#function)\(#line)")
+
+        // Options are sent as options[], the vote as an array of ints in optionIds[]
+        NCAPIController.sharedInstance().createPoll(withQuestion: Self.specialCharacters, withOptions: options, withResultMode: .public, withMaxVotes: 2, asDraft: false, inRoom: room.token, forAccount: activeAccount) { poll, error in
+            XCTAssertNil(error)
+
+            guard let poll else {
+                XCTFail("Poll was not created")
+                exp.fulfill()
+                return
+            }
+
+            XCTAssertEqual(poll.question, Self.specialCharacters)
+            XCTAssertEqual(poll.options, options)
+            XCTAssertEqual(poll.maxVotes, 2)
+
+            NCAPIController.sharedInstance().voteOnPoll(withId: poll.pollId, inRoom: room.token, withOptions: [0, 2], forAccount: activeAccount) { votedPoll, error in
+                XCTAssertNil(error)
+                XCTAssertEqual(votedPoll?.votedSelf.sorted(), [0, 2])
+
+                exp.fulfill()
+            }
+        }
+
+        await fulfillment(of: [exp], timeout: TestConstants.timeoutShort)
+    }
 }

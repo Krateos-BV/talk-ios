@@ -37,7 +37,7 @@ public enum NCExternalSignalingSendMessageStatus {
     case applicationError
 }
 
-@objcMembers public class NCExternalSignalingController: NSObject, URLSessionWebSocketDelegate, CCCertificateDelegate {
+@objcMembers public class NCExternalSignalingController: NSObject, URLSessionWebSocketDelegate {
 
     public weak var delegate: NCExternalSignalingControllerDelegate?
 
@@ -55,11 +55,16 @@ public enum NCExternalSignalingSendMessageStatus {
     public private(set) var sessionId: String?
     public private(set) var participantsMap = [String: SignalingParticipant]()
 
+    // Key exchange for end-to-end encrypted calls, set while we are in a room that needs it
+    private(set) var callEncryption: CallEncryption?
+    private var callEncryptionRoomToken: String?
+
     private let initialReconnectInterval = 1
     private let maxReconnectInterval = 16
     private let webSocketTimeoutInterval = 15.0
 
     private var webSocket: URLSessionWebSocketTask?
+    private var webSocketSession: URLSession?
     private var serverUrl: String
     private var ticket: String
     private var resumeId: String?
@@ -72,6 +77,7 @@ public enum NCExternalSignalingSendMessageStatus {
     private var reconnectInterval: Int = 0
     private var reconnectTimer: Timer?
     private var disconnectTime: TimeInterval?
+    private var waitingForCertificateAcceptance = false
 
     init(account: TalkAccount, serverUrl: String, ticket: String) {
         self.account = account
@@ -82,6 +88,8 @@ public enum NCExternalSignalingSendMessageStatus {
         self.serverUrl = NCExternalSignalingController.getWebSocketUrl(forServer: serverUrl)
 
         super.init()
+
+        NotificationCenter.default.addObserver(self, selector: #selector(certificateAccepted(notification:)), name: .NCCertificateAccepted, object: nil)
 
         self.reconnectInterval = self.initialReconnectInterval
         self.connect()
@@ -126,6 +134,7 @@ public enum NCExternalSignalingSendMessageStatus {
 
         self.invalidateReconnectionTimer()
 
+        self.waitingForCertificateAcceptance = false
         self.disconnected = false
         self.nextMessageId = 1
         self.messagesWithCompletionBlock = []
@@ -148,6 +157,7 @@ public enum NCExternalSignalingSendMessageStatus {
         }
 
         let webSocket = wsSession.webSocketTask(with: wsRequest)
+        self.webSocketSession = wsSession
         self.webSocket = webSocket
 
         webSocket.resume()
@@ -202,17 +212,44 @@ public enum NCExternalSignalingSendMessageStatus {
     func disconnect() {
         NCLog.log("Disconnecting from: \(self.serverUrl)")
 
-        self.disconnectTime = Date().timeIntervalSince1970
-
         DispatchQueue.main.async {
             self.invalidateReconnectionTimer()
             self.resetWebSocket()
         }
     }
 
+    // Debug only, the socket dies without a "bye", like on a network loss, so the server keeps the session for resuming
+    func simulateConnectionLoss() {
+        DispatchQueue.main.async {
+            NCLog.log("Debug: Simulating a connection loss of: \(self.serverUrl)")
+            self.webSocket?.cancel()
+        }
+    }
+
+    var debugInfoLines: [String] {
+        [
+            "Server: \(serverUrl)",
+            "Connected: \(!disconnected), hello received: \(helloResponseReceived)",
+            "Session id: \(sessionId ?? "none")",
+            "Resume id: \(resumeId != nil ? "yes" : "no")",
+            "Current room: \(currentRoom ?? "none"), joined room: \(joinedRoomToken ?? "none")",
+            "Features: mcu \(hasMCU), update-sdp \(hasUpdateSdp), simulcast \(hasSimulcast), chat-relay \(hasChatRelay)",
+            "Pending messages: \(pendingMessages.count)",
+            "Participants: \(participantsMap.count)"
+        ]
+    }
+
     func resetWebSocket() {
+        // The server expires the session 30s after the first connection loss, failed reconnect attempts don't extend that
+        if self.disconnectTime == nil {
+            self.disconnectTime = Date().timeIntervalSince1970
+        }
+
         self.webSocket?.cancel()
         self.webSocket = nil
+        // The session retains its delegate until invalidated
+        self.webSocketSession?.invalidateAndCancel()
+        self.webSocketSession = nil
         self.helloResponseReceived = false
         self.joinedRoomToken = nil
         self.helloMessage?.ignoreCompletionBlock()
@@ -296,9 +333,7 @@ public enum NCExternalSignalingSendMessageStatus {
                         "ticket": ticket
                     ]
                 ],
-                "features": [
-                    "chat-relay"
-                ]
+                "features": self.helloFeatures
             ]
         ]
 
@@ -308,9 +343,7 @@ public enum NCExternalSignalingSendMessageStatus {
                 "hello": [
                     "version": "1.0",
                     "resumeid": resumeId,
-                    "features": [
-                        "chat-relay"
-                    ]
+                    "features": self.helloFeatures
                 ]
             ]
         }
@@ -323,6 +356,14 @@ public enum NCExternalSignalingSendMessageStatus {
                 self.reconnect()
             }
         }
+    }
+
+    private var isCallEncryptionEnabled: Bool {
+        NCSettingsController.sharedInstance().isEndToEndEncryptedCallingEnabled(forAccount: account.accountId)
+    }
+
+    private var helloFeatures: [String] {
+        isCallEncryptionEnabled ? ["chat-relay", "encryption"] : ["chat-relay"]
     }
 
     func helloResponseReceived(messageDict: [AnyHashable: Any]) {
@@ -341,6 +382,7 @@ public enum NCExternalSignalingSendMessageStatus {
         }
 
         self.resumeId = helloDict["resumeid"] as? String
+        self.disconnectTime = nil
 
         let sessionChanged = self.sessionId != newSessionId
         self.sessionId = newSessionId
@@ -348,6 +390,7 @@ public enum NCExternalSignalingSendMessageStatus {
         if sessionChanged {
             // The new session did not join any room yet, the re-join below takes care of that
             self.joinedRoomToken = nil
+            self.updateCallEncryption(forRoom: nil)
         } else {
             // The session was resumed, so the server kept us in the room and replays what we missed
             self.joinedRoomToken = self.currentRoom
@@ -396,12 +439,13 @@ public enum NCExternalSignalingSendMessageStatus {
     }
 
     func errorResponseReceived(messageDict: [AnyHashable: Any]) {
+        // Logged before the guard, errors to messages sent without an id have none either
+        NCLog.log("Received error response \(messageDict["error"] ?? "")")
+
         guard let errorDict = messageDict["error"] as? [AnyHashable: Any],
               let errorCode = errorDict["code"] as? String,
               let messageId = messageDict["id"] as? String
         else { return }
-
-        NCLog.log("Received error response \(errorCode)")
 
         if errorCode == "no_such_session" || errorCode == "too_many_requests" {
             // We could not resume the previous session, but the websocket is still alive -> resend the hello message without a resumeId
@@ -576,6 +620,7 @@ public enum NCExternalSignalingSendMessageStatus {
         // Outside the check above on purpose: re-joining after a reconnect leaves `currentRoom`
         // unchanged, but it is the moment we are part of the room on the signaling server again.
         self.joinedRoomToken = newRoomId.isEmpty ? nil : newRoomId
+        self.updateCallEncryption(forRoom: self.joinedRoomToken)
 
         if let messageId = messageDict["id"] as? String {
             self.executeCompletionBlock(forMessageId: messageId, withStatus: .success)
@@ -604,6 +649,9 @@ public enum NCExternalSignalingSendMessageStatus {
             guard let joinDict = eventDict["join"] as? [[AnyHashable: Any]]
             else { return }
 
+            // Including our own sessions, keys are exchanged with every session in the room like in the web client
+            self.callEncryption?.usersJoined(joinDict.compactMap { $0["sessionid"] as? String })
+
             for participantDict in joinDict {
                 let participant = SignalingParticipant(withJoinDictionary: participantDict)
 
@@ -630,6 +678,8 @@ public enum NCExternalSignalingSendMessageStatus {
         } else if eventType == "leave" {
             guard let leftSessions = eventDict["leave"] as? [String]
             else { return }
+
+            self.callEncryption?.usersLeft(leftSessions)
 
             for sessionId in leftSessions {
                 guard let participant = self.getParticipant(fromSessionId: sessionId)
@@ -739,6 +789,21 @@ public enum NCExternalSignalingSendMessageStatus {
               let messageType = dataDict["type"] as? String
         else { return }
 
+        if messageType == "message",
+           let payload = dataDict["payload"] as? [String: Any],
+           CallEncryption.isEncryptionMessage(payload) {
+            if let sender = messageDict["sender"] as? [AnyHashable: Any],
+               let fromSession = sender["sessionid"] as? String {
+                if let callEncryption = self.callEncryption {
+                    callEncryption.handleMessage(from: fromSession, payload: payload)
+                } else {
+                    NCLog.log("CallEncryption: Dropped \(payload["type"] ?? "") from \(fromSession), no key exchange")
+                }
+            }
+
+            return
+        }
+
         if messageType == "startedTyping" || messageType == "stoppedTyping" {
             var userInfo = [String: Any]()
 
@@ -771,6 +836,47 @@ public enum NCExternalSignalingSendMessageStatus {
         }
     }
 
+    // MARK: - Call encryption
+
+    private func updateCallEncryption(forRoom roomToken: String?) {
+        guard let roomToken, self.isCallEncryptionEnabled, let sessionId = self.sessionId else {
+            self.callEncryption?.close()
+            self.callEncryption = nil
+            return
+        }
+
+        // Kept while we stay in the same room with the same session
+        if self.callEncryption != nil, self.callEncryptionRoomToken == roomToken {
+            return
+        }
+
+        NCLog.log("CallEncryption: Key exchange for room \(roomToken) with session \(sessionId)")
+        self.callEncryption?.close()
+        self.callEncryptionRoomToken = roomToken
+        self.callEncryption = CallEncryption(ownSessionId: sessionId) { [weak self] recipientSessionId, payload in
+            self?.sendEncryptionMessage(payload, toSessionId: recipientSessionId)
+        }
+    }
+
+    private func sendEncryptionMessage(_ payload: [String: Any], toSessionId sessionId: String) {
+        let messageDict: [AnyHashable: Any] = [
+            "type": "message",
+            "message": [
+                "recipient": [
+                    "type": "session",
+                    "sessionid": sessionId
+                ],
+                "data": [
+                    "type": "message",
+                    "to": sessionId,
+                    "payload": payload
+                ]
+            ]
+        ]
+
+        self.send(message: messageDict, withCompletionBlock: nil)
+    }
+
     // MARK: - Completion blocks
 
     func executeCompletionBlock(forMessageId messageId: String, withStatus status: NCExternalSignalingSendMessageStatus) {
@@ -789,10 +895,22 @@ public enum NCExternalSignalingSendMessageStatus {
         }
     }
 
-    // MARK: - CCCertificateDelegate
+    // MARK: - Certificates
 
-    public func trustedCerticateAccepted() {
-        self.reconnect()
+    // Not a certificate delegate, as the alert for this host may have been presented by someone else
+    func certificateAccepted(notification: Notification) {
+        guard let acceptedHost = notification.userInfo?[NCCertificate.hostKey] as? String,
+              let host = URL(string: self.serverUrl)?.host,
+              host.caseInsensitiveCompare(acceptedHost) == .orderedSame
+        else { return }
+
+        DispatchQueue.main.async {
+            guard self.waitingForCertificateAcceptance else { return }
+
+            NCLog.log("Certificate accepted for \(host), connecting")
+            self.reconnectInterval = self.initialReconnectInterval
+            self.connect()
+        }
     }
 
     // MARK: - NSURLSessionWebSocketDelegate
@@ -823,12 +941,17 @@ public enum NCExternalSignalingSendMessageStatus {
             if let error = error as? URLError, error.code == .serverCertificateUntrusted {
                 NCLog.log("WebSocket session didCompleteWithError: \(error)")
 
+                // No automatic retry, but marked as disconnected so foregrounding or joining a call retries (and asks again)
+                self.invalidateReconnectionTimer()
+                self.resetWebSocket()
+                self.waitingForCertificateAcceptance = true
+
                 DispatchQueue.main.async {
-                    CCCertificate.sharedManager()
+                    NCCertificate.shared
                         .presentViewControllerCertificate(
-                            withTitle: error.localizedDescription,
+                            withError: error as NSError,
                             viewController: NCUserInterfaceController.sharedInstance().mainViewController,
-                            delegate: self)
+                            delegate: nil)
                 }
 
                 return
@@ -843,7 +966,7 @@ public enum NCExternalSignalingSendMessageStatus {
 
     public func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         // The pinning check
-        if CCCertificate.sharedManager().checkTrustedChallenge(challenge) {
+        if NCCertificate.shared.checkTrustedChallenge(challenge) {
             completionHandler(.useCredential, URLCredential(trust: challenge.protectionSpace.serverTrust!))
         } else {
             completionHandler(.performDefaultHandling, nil)

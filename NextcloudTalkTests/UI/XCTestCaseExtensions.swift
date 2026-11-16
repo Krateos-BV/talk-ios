@@ -35,7 +35,7 @@ extension XCTestCase {
                 XCTFail("Timed out waiting for either element to exist.")
                 break
             }
-            usleep(500)
+            usleep(200_000)
         }
 
         if elementA.exists {
@@ -50,17 +50,19 @@ extension XCTestCase {
     }
 
     @discardableResult
-    func launchAndLogin() -> XCUIApplication {
+    func launchApp(with arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
 
         app.launchArguments += ["-AppleLanguages", "(en-US)"]
         app.launchArguments += ["-AppleLocale", "\"en-US\""]
         app.launchArguments += ["-TestEnvironment"]
+        app.launchArguments += arguments
         app.launch()
 
-        let accountSwitcherButton = app.buttons["LoadedProfileButton"]
-        let serverAddressHttpsTextField = app.textFields["Server address https://…"]
+        return app
+    }
 
+<<<<<<< HEAD
         // Wait shortly until the app is fully started
         let foundElement = waitForEitherElementToExist(accountSwitcherButton, serverAddressHttpsTextField, TestConstants.timeoutLong)
 
@@ -108,9 +110,19 @@ extension XCTestCase {
         waitForReady(object: loginWebview)
 
         grantAccessButton.tap()
+=======
+    // Starts with only the test account configured, independent of what previous tests left behind
+    @discardableResult
+    func launchAndLogin() -> XCUIApplication {
+        let app = launchApp(with: [
+            "-TestAccountServer", TestConstants.server,
+            "-TestAccountUser", TestConstants.username,
+            "-TestAccountPassword", TestConstants.password
+        ])
+>>>>>>> upstream/main
 
         // When the account switcher gets enabled, we have atleast 1 account in the app and are online
-        waitForReady(object: accountSwitcherButton, timeout: TestConstants.timeoutLong)
+        waitForReady(object: app.buttons["LoadedProfileButton"], timeout: TestConstants.timeoutLong)
 
         return app
     }

@@ -25,4 +25,8 @@ HD
 fullscreen
 GIFs
 Giphy
+<<<<<<< HEAD
 XeniaCloud
+=======
+jpg
+>>>>>>> upstream/main
