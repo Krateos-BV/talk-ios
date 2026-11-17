@@ -776,9 +776,10 @@ class SettingsTableViewController: UITableViewController, UITextFieldDelegate, U
         let option = options[indexPath.row]
         switch option {
         case AboutSection.kAboutSectionPrivacy.rawValue:
-            if let url = URL(string: privacyURL), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                let safariVC = SFSafariViewController(url: url)
-                self.present(safariVC, animated: true, completion: nil)
+            // Not SFSafariViewController: it cannot keep the user on the statement, and the website links to plans (Guideline 3.1.1, XEN-381).
+            if let url = URL(string: privacyURL), url.scheme?.lowercased() == "https" {
+                let privacyVC = PrivacyStatementViewController(url: url)
+                self.navigationController?.pushViewController(privacyVC, animated: true)
             }
         case AboutSection.kAboutSectionSourceCode.rawValue:
             let safariVC = SFSafariViewController(url: URL(string: "https://github.com/nextcloud/talk-ios")!)
