@@ -17,6 +17,7 @@ NSString * const kNCAuthTokenFlowEndpoint               = @"/index.php/login/flo
 @interface AuthenticationViewController () <WKNavigationDelegate>
 {
     UIActivityIndicatorView *_activityIndicatorView;
+    XeniaWebNavigationPolicy *_navigationPolicy;
 }
 
 @end
@@ -38,6 +39,7 @@ NSString * const kNCAuthTokenFlowEndpoint               = @"/index.php/login/flo
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    _navigationPolicy = [XeniaWebNavigationPolicy loginWithServerURL:[NSURL URLWithString:_serverUrl]];
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
     configuration.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
 
@@ -149,8 +151,9 @@ NSString * const kNCAuthTokenFlowEndpoint               = @"/index.php/login/flo
         return;
     }
 
-    if (navigationAction.targetFrame == nil) {
-        [NCUtils openLinkInBrowserWithLink:url.absoluteString];
+    // Keep the login on the sign-in pages: no new windows, no website, no sign-up flow.
+    // App Review must not reach plans or pricing from here (Guideline 3.1.1, XEN-381).
+    if (![_navigationPolicy allowsWithNavigationAction:navigationAction]) {
         decisionHandler(WKNavigationActionPolicyCancel);
         return;
     }
