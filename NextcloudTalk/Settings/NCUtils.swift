@@ -13,8 +13,6 @@ import AVFoundation
 
     private static let nextcloudScheme = "nextcloud:"
 
-    public static let isTestEnvironment = ProcessInfo.processInfo.arguments.contains("-TestEnvironment")
-
     public static func previewImage(forFileExtension fileExtension: String) -> String {
         return previewImage(forFileType: UTType(filenameExtension: fileExtension))
     }
@@ -137,6 +135,13 @@ import AVFoundation
 #endif
     }
 
+    public static func openFileInNextcloudApp(fileId: String) {
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+
+        // Since https://github.com/nextcloud/ios/pull/3983 the Files app ignores the path and looks the file up by the id at the end of the link
+        self.openFileInNextcloudApp(path: "", withFileLink: "\(activeAccount.server)/index.php/f/\(fileId)")
+    }
+
     public static func openFileInNextcloudAppOrBrowser(path: String, withFileLink link: String) {
 #if !APP_EXTENSION
         if self.isNextcloudAppInstalled() {
@@ -161,6 +166,42 @@ import AVFoundation
         let roomPrefix2 = "\(activeAccount.server)/index.php/call"
 
         return link.lowercased().contains(roomPrefix1) || link.lowercased().contains(roomPrefix2)
+    }
+
+    public static func instanceFileId(fromLink link: String) -> String? {
+        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
+
+        return self.instanceFileId(fromLink: link, serverUrl: activeAccount.server)
+    }
+
+    // Accepts {server}[/index.php]/f/{id}, /apps/files/files/{id}?dir=… and /apps/files/?fileid={id}
+    public static func instanceFileId(fromLink link: String, serverUrl: String) -> String? {
+        let server = serverUrl.hasSuffix("/") ? String(serverUrl.dropLast()) : serverUrl
+
+        guard let serverRange = link.range(of: server, options: [.anchored, .caseInsensitive]),
+              let components = URLComponents(string: String(link[serverRange.upperBound...])),
+              components.path.hasPrefix("/")
+        else { return nil }
+
+        var segments = components.path.split(separator: "/").map(String.init)
+
+        if segments.first == "index.php" {
+            segments.removeFirst()
+        }
+
+        var fileId: String?
+
+        if segments.count == 2, segments[0] == "f" {
+            fileId = segments[1]
+        } else if segments.count == 4, segments[0...2] == ["apps", "files", "files"] {
+            fileId = segments[3]
+        } else if segments == ["apps", "files"] {
+            fileId = components.queryItems?.first(where: { $0.name == "fileid" })?.value
+        }
+
+        guard let fileId, !fileId.isEmpty, fileId.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+
+        return fileId
     }
 
     // MARK: - Date utils
@@ -314,6 +355,16 @@ import AVFoundation
         var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
         data.withUnsafeBytes {
             _ = CC_SHA1($0.baseAddress, CC_LONG(data.count), &digest)
+        }
+        let hexBytes = digest.map { String(format: "%02hhx", $0) }
+        return hexBytes.joined()
+    }
+
+    public static func sha256(fromString string: String) -> String {
+        let data = string.data(using: .utf8)!
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes {
+            _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &digest)
         }
         let hexBytes = digest.map { String(format: "%02hhx", $0) }
         return hexBytes.joined()

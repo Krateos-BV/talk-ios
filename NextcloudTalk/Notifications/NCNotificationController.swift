@@ -46,7 +46,13 @@ public class NCNotificationController: NSObject, UNUserNotificationCenterDelegat
     }
 
     public func requestAuthorization() {
-        let authOptions: UNAuthorizationOptions = [.alert, .sound, .badge]
+        var authOptions: UNAuthorizationOptions = [.alert, .sound, .badge]
+
+        // Granted without a prompt, nobody can answer one on CI and the default UI test handler denies it
+        if TestEnvironment.isRunningTests {
+            authOptions.insert(.provisional)
+        }
+
         self.notificationCenter.requestAuthorization(options: authOptions) { granted, _ in
             if granted {
                 NSLog("User notifications permission granted.")
@@ -67,7 +73,7 @@ public class NCNotificationController: NSObject, UNUserNotificationCenterDelegat
         case .deleteAll:
             self.removeAllNotifications(forAccountId: pushNotification.accountId)
         case .deleteMultiple:
-            self.removeNotification(withNotificationIds: pushNotification.notificationIds as? [NSNumber], forAccountId: pushNotification.accountId, withCompletionBlock: nil)
+            self.removeNotification(withNotificationIds: pushNotification.notificationIds, forAccountId: pushNotification.accountId, withCompletionBlock: nil)
         default:
             NSLog("Push Notification of an unknown type received")
         }
@@ -143,16 +149,16 @@ public class NCNotificationController: NSObject, UNUserNotificationCenterDelegat
         self.updateAppIconBadgeNumber()
     }
 
-    public func showIncomingCall(forPushNotification pushNotification: NCPushNotification) {
+    public func showIncomingCall(forPushNotification pushNotification: NCPushNotification, completion: @escaping () -> Void) {
         if CallKitManager.isCallKitAvailable() {
-            CallKitManager.sharedInstance().reportIncomingCall(pushNotification.roomToken, withDisplayName: NSLocalizedString("Incoming call", comment: ""), forAccountId: pushNotification.accountId)
+            CallKitManager.sharedInstance().reportIncomingCall(pushNotification.roomToken, withDisplayName: NSLocalizedString("Incoming call", comment: ""), forAccountId: pushNotification.accountId, completion: completion)
         } else {
-            CallKitManager.sharedInstance().reportIncomingCallForNonCallKitDevices(withPushNotification: pushNotification)
+            CallKitManager.sharedInstance().reportIncomingCallForNonCallKitDevices(withPushNotification: pushNotification, completion: completion)
         }
     }
 
-    public func showIncomingCallForOldAccount() {
-        CallKitManager.sharedInstance().reportIncomingCallForOldAccount()
+    public func showIncomingCallForOldAccount(completion: @escaping () -> Void) {
+        CallKitManager.sharedInstance().reportIncomingCallForOldAccount(completion: completion)
     }
 
     public func showLocalNotification(forChatNotification notification: NCNotification, forAccountId accountId: String) {
@@ -626,7 +632,7 @@ public class NCNotificationController: NSObject, UNUserNotificationCenterDelegat
         }
 
         switch localNotificationType {
-        case .missedCall, .cancelledCall, .failedSendChat, .chatNotification, .recordingConsentRequired:
+        case .missedCall, .cancelledCall, .failedSendChat, .chatNotification, .recordingConsentRequired, .failedBackgroundUpload:
             NCUserInterfaceController.sharedInstance().presentChat(forLocalNotification: notificationUserInfo)
         case .callFromOldAccount:
             NCUserInterfaceController.sharedInstance().presentSettingsViewController()

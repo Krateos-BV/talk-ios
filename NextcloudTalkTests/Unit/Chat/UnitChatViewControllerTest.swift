@@ -254,6 +254,54 @@ final class UnitChatViewControllerTest: TestBaseRealm {
         drainMainQueue()
     }
 
+    // #2760: a server read marker beyond every message (5101812 vs ~112k) ended up as the newest id of the chat block
+    func testMessageExistsOnlyForStoredMessages() throws {
+        let room = addRoom(withToken: "storedMessagesRoom")
+        let chatController = NCChatController(for: room)!
+
+        try? realm.transaction {
+            for id in 100...112 {
+                realm.add(NCChatMessage(dictionary: ["id": id, "token": room.token!], andAccountId: room.accountId)!)
+            }
+        }
+
+        XCTAssertTrue(chatController.messageExists(112))
+        XCTAssertFalse(chatController.messageExists(5101812))
+    }
+
+    func testInitialHistoryLowersChatBlockToNewestReceivedMessage() throws {
+        let room = addRoom(withToken: "initialBlockRoom")
+        let chatController = NCChatController(for: room)!
+
+        let block = NCChatBlock()
+        block.internalId = room.internalId
+        block.accountId = room.accountId
+        block.token = room.token
+        block.oldestMessageId = 50
+        block.newestMessageId = 5101812
+        try? realm.transaction { realm.add(block) }
+
+        // Initial history is requested from the read marker and merges into the existing block
+        let received = (100...105).map { ["id": $0, "token": room.token!] as [String: Any] }
+        chatController.updateChatBlocks(withReceivedMessages: received, newestKnown: 5101812, andLastKnown: 100)
+
+        let blocks = NCChatBlock.objects(where: "internalId = %@", room.internalId).compactMap { $0 as? NCChatBlock }
+        XCTAssertEqual(blocks.map { [$0.oldestMessageId, $0.newestMessageId] }, [[50, 105]])
+    }
+
+    // Polls sending a common read the server no longer has get an immediate empty 200, so a lower one must be accepted
+    func testLowerCommonReadMessageIsAccepted() throws {
+        let room = addRoom(withToken: "commonReadRoom") { $0.lastCommonReadMessage = 500000 }
+        let chatController = NCChatController(for: NCRoom(value: room))!
+
+        expectation(forNotification: .NCChatControllerDidReceiveDifferentCommonReadMessage, object: chatController)
+        chatController.checkLastCommonReadMessage(596)
+        waitForExpectations(timeout: TestConstants.timeoutShort)
+
+        XCTAssertEqual(chatController.room.lastCommonReadMessage, 596)
+        XCTAssertEqual((NCRoom.objects(where: "internalId = %@", room.internalId).firstObject() as? NCRoom)?.lastCommonReadMessage, 596)
+    }
+
     func testCatchUpDoesNotHandOverToTheRelayWhileTheRoomIsNotJoined() throws {
         let room = addRoom(withToken: "relayCatchUpRoom")
         let chatController = NCChatController(for: room)!
@@ -271,6 +319,128 @@ final class UnitChatViewControllerTest: TestBaseRealm {
         chatController.handOverPollingToChatRelayForTesting()
         chatController.waitForChatRelayQueueForTesting()
         XCTAssertEqual(chatController.chatRelayStateForTesting, .inactive)
+
+        chatController.stop()
+        drainMainQueue()
+    }
+
+    // MARK: - Chat relay reactions
+
+    /// A message as the relay sends it: reaction counts, but never reactionsSelf
+    private func relayedMessageDict(id: Int, token: String, actorId: String = "otherUser", message: String = "Hello",
+                                    systemMessage: String = "", reactions: [String: Int] = [:], parent: [String: Any]? = nil) -> [String: Any] {
+        var messageDict: [String: Any] = [
+            "id": id,
+            "token": token,
+            "actorType": "users",
+            "actorId": actorId,
+            "actorDisplayName": actorId,
+            "timestamp": Int(Date().timeIntervalSince1970),
+            "message": message,
+            "messageParameters": [:],
+            "systemMessage": systemMessage,
+            "messageType": systemMessage.isEmpty ? "comment" : "system",
+            "reactions": reactions
+        ]
+
+        messageDict["parent"] = parent
+
+        return messageDict
+    }
+
+    private func storeMessage(_ messageDict: [String: Any], reactionsSelf: [String]) {
+        var messageDict = messageDict
+        messageDict["reactionsSelf"] = reactionsSelf
+
+        try? realm.transaction {
+            realm.add(NCChatMessage(dictionary: messageDict, andAccountId: TestBaseRealm.fakeAccountId)!)
+        }
+    }
+
+    private func storedReactionsSelf(ofMessageId messageId: Int, token: String) -> [String]? {
+        realm.refresh()
+
+        let internalId = "\(TestBaseRealm.fakeAccountId)@\(token)@\(messageId)"
+        guard let message = NCChatMessage.objects(where: "internalId = %@", internalId).firstObject() as? NCChatMessage,
+              let data = message.reactionsSelfJSONString?.data(using: .utf8)
+        else { return nil }
+
+        return try? JSONSerialization.jsonObject(with: data) as? [String]
+    }
+
+    /// Sends the messages over an active chat relay and waits until they are stored
+    private func receiveOverChatRelay(_ messageDicts: [[String: Any]], in room: NCRoom) -> NCChatController {
+        // The relay queue reads the room, which a managed object doesn't allow
+        let chatController = NCChatController(for: NCRoom(value: room))!
+        let signalingController = inertSignalingController()
+
+        chatController.setupChatRelayForTesting(with: signalingController)
+        chatController.markChatRelayActiveForTesting()
+
+        for messageDict in messageDicts {
+            NotificationCenter.default.post(name: .extSignalingDidReceiveChatMessage, object: signalingController,
+                                            userInfo: ["roomToken": room.token!, "message": messageDict])
+        }
+
+        chatController.waitForChatRelayQueueForTesting()
+
+        return chatController
+    }
+
+    func testRelayedReplyKeepsOurReactionsOnTheParent() throws {
+        let room = addRoom(withToken: "relayReplyRoom")
+        let parent = relayedMessageDict(id: 10, token: room.token, reactions: ["👍": 2])
+        storeMessage(parent, reactionsSelf: ["👍"])
+
+        let chatController = receiveOverChatRelay([relayedMessageDict(id: 11, token: room.token, parent: parent)], in: room)
+
+        XCTAssertEqual(storedReactionsSelf(ofMessageId: 10, token: room.token), ["👍"],
+                       "A relayed reply must not drop our own reactions on the message it replies to")
+
+        chatController.stop()
+        drainMainQueue()
+    }
+
+    // E.g. replayed after a catch-up that already stored it
+    func testRelayedMessageWeAlreadyStoredKeepsOurReactions() throws {
+        let room = addRoom(withToken: "relayDuplicateRoom")
+        let message = relayedMessageDict(id: 20, token: room.token, reactions: ["❤️": 1])
+        storeMessage(message, reactionsSelf: ["❤️"])
+
+        let chatController = receiveOverChatRelay([message], in: room)
+
+        XCTAssertEqual(storedReactionsSelf(ofMessageId: 20, token: room.token), ["❤️"])
+
+        chatController.stop()
+        drainMainQueue()
+    }
+
+    func testRelayedReactionOfSomeoneElseKeepsOurReactions() throws {
+        let room = addRoom(withToken: "relayOtherReactionRoom")
+        let parent = relayedMessageDict(id: 30, token: room.token, reactions: ["👍": 1])
+        storeMessage(parent, reactionsSelf: ["👍"])
+
+        let reactedParent = relayedMessageDict(id: 30, token: room.token, reactions: ["👍": 2])
+        let reaction = relayedMessageDict(id: 31, token: room.token, message: "👍", systemMessage: "reaction", parent: reactedParent)
+        let chatController = receiveOverChatRelay([reaction], in: room)
+
+        XCTAssertEqual(storedReactionsSelf(ofMessageId: 30, token: room.token), ["👍"])
+
+        chatController.stop()
+        drainMainQueue()
+    }
+
+    func testOurOwnRelayedReactionIsMarkedOnTheParent() throws {
+        let room = addRoom(withToken: "relayOwnReactionRoom")
+        let parent = relayedMessageDict(id: 40, token: room.token, reactions: ["👍": 1])
+        storeMessage(parent, reactionsSelf: ["👍"])
+
+        let reactedParent = relayedMessageDict(id: 40, token: room.token, reactions: ["👍": 1, "🎉": 1])
+        let reaction = relayedMessageDict(id: 41, token: room.token, actorId: TestConstants.username, message: "🎉",
+                                          systemMessage: "reaction", parent: reactedParent)
+        let chatController = receiveOverChatRelay([reaction], in: room)
+
+        XCTAssertEqual(storedReactionsSelf(ofMessageId: 40, token: room.token), ["👍", "🎉"])
 
         chatController.stop()
         drainMainQueue()
