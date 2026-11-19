@@ -11,11 +11,11 @@ import NextcloudKit
 }
 
 @objcMembers
-class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateDelegate, DetailedOptionsSelectorTableViewControllerDelegate, AuthenticationViewControllerDelegate, QRScannerViewControllerDelegate {
+class LoginViewController: UIViewController, UITextFieldDelegate, NCCertificateDelegate, DetailedOptionsSelectorTableViewControllerDelegate, AuthenticationViewControllerDelegate, QRScannerViewControllerDelegate {
 
     weak var delegate: LoginViewControllerDelegate?
 
-    var authenticationViewController = AuthenticationViewController()
+    var authenticationViewController: AuthenticationViewController?
     var importedNextcloudFilesAccounts: [NKShareAccounts.DataAccounts] = []
 
     @IBOutlet weak var appLogoImageView: UIImageView!
@@ -170,7 +170,7 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
 
     // MARK: - Certificate delegate
 
-    func trustedCerticateAccepted() {
+    func trustedCertificateAccepted() {
         loginButtonPressed(self)
     }
 
@@ -239,9 +239,9 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
             if let error {
                 if error.underlyingError.code == NSURLErrorServerCertificateUntrusted {
                     DispatchQueue.main.async {
-                        CCCertificate.sharedManager()
+                        NCCertificate.shared
                             .presentViewControllerCertificate(
-                                withTitle: error.underlyingError.localizedDescription,
+                                withError: error.underlyingError,
                                 viewController: self,
                                 delegate: self)
                     }
@@ -271,16 +271,12 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
     }
 
     func presentAuthenticationViewController(serverURL: String, user: String?) {
-        guard let authenticationVC = AuthenticationViewController(serverUrl: serverURL) else { return }
-
+        let authenticationVC = AuthenticationViewController(serverUrl: serverURL)
+        authenticationVC.delegate = self
+        authenticationVC.user = user
         authenticationViewController = authenticationVC
-        authenticationViewController.delegate = self
 
-        if user != nil {
-            authenticationViewController.user = user
-        }
-
-        let authenticationNC = UINavigationController(rootViewController: authenticationViewController)
+        let authenticationNC = UINavigationController(rootViewController: authenticationVC)
         present(authenticationNC, animated: true)
     }
 
@@ -328,23 +324,22 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
             importedAccounts.append(option)
         }
 
-        if let accountSelectorVC = DetailedOptionsSelectorTableViewController(accounts: importedAccounts, andStyle: .insetGrouped) {
-            accountSelectorVC.title = NSLocalizedString("Import account", comment: "")
-            accountSelectorVC.delegate = self
-            let accountSelectorNC = NCNavigationController(rootViewController: accountSelectorVC)
-            self.present(accountSelectorNC, animated: true)
-        }
+        let accountSelectorVC = DetailedOptionsSelectorTableViewController(accounts: importedAccounts, andStyle: .insetGrouped)
+        accountSelectorVC.title = NSLocalizedString("Import account", comment: "")
+        accountSelectorVC.delegate = self
+        let accountSelectorNC = NCNavigationController(rootViewController: accountSelectorVC)
+        self.present(accountSelectorNC, animated: true)
     }
 
     // MARK: - DetailedOptionSelector delegate
 
-    func detailedOptionsSelector(_ viewController: DetailedOptionsSelectorTableViewController!, didSelectOptionWithIdentifier option: DetailedOption!) {
+    func detailedOptionsSelector(_ viewController: DetailedOptionsSelectorTableViewController, didSelectOptionWithIdentifier option: DetailedOption) {
         dismiss(animated: true) {
             self.presentAuthenticationViewController(serverURL: option.subtitle, user: option.identifier)
         }
     }
 
-    func detailedOptionsSelectorWasCancelled(_ viewController: DetailedOptionsSelectorTableViewController!) {
+    func detailedOptionsSelectorWasCancelled(_ viewController: DetailedOptionsSelectorTableViewController) {
         dismiss(animated: true)
     }
 
@@ -386,7 +381,7 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
 
     // MARK: - AuthenticationViewController delegate
 
-    func authenticationViewControllerDidFinish(_ viewController: AuthenticationViewController!) {
+    func authenticationViewControllerDidFinish(_ viewController: AuthenticationViewController) {
         if viewController == authenticationViewController {
             delegate?.loginViewControllerDidFinish()
         }
@@ -404,7 +399,7 @@ class LoginViewController: UIViewController, UITextFieldDelegate, CCCertificateD
         NotificationPresenter.shared().displayActivityIndicator(true)
 
         // We received a onetime login token and need to convert it to a permanent one. The token only allows to retrieve a permanent one, no other routes allowed
-        NCAPIController.sharedInstance().getAppPasswordOnetime(forServer: serverURL, withUsername: user, andOnetimeToken: onetimeToken) { [weak self] permanentAppToken in
+        NCAPIController.sharedInstance().getAppPassword(forServer: serverURL, withUsername: user, andPassword: onetimeToken, isOnetimeToken: true) { [weak self] permanentAppToken in
             NotificationPresenter.shared().dismiss()
 
             guard let permanentAppToken else {

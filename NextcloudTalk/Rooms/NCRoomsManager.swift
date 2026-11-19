@@ -55,6 +55,7 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
     private var highlightMessageDict: [AnyHashable: Any]?
     private var showThreadPushNotification: NCPushNotification?
     private var pendingPrivateReplyInternalId: String?
+    private var pendingFailedShareJobId: String?
 
     override init() {
         super.init()
@@ -99,8 +100,11 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
 
             print("Finished rooms update with \(roomsWithNewMessages?.count ?? 0) rooms with new messages")
 
-            // When in low power mode, we only update the conversation list and don't load new messages for each room
-            guard !ProcessInfo.processInfo.isLowPowerModeEnabled, NCDatabaseManager.sharedInstance().serverHasTalkCapability(.chatKeepNotifications, forAccountId: account.accountId) else {
+            // In low power mode, or when the server turned preloading off, we only update the conversation list
+            guard !ProcessInfo.processInfo.isLowPowerModeEnabled,
+                  NCDatabaseManager.sharedInstance().serverHasTalkCapability(.chatKeepNotifications, forAccountId: account.accountId),
+                  NCDatabaseManager.sharedInstance().serverCapabilities(forAccountId: account.accountId)?.mobilePreloadChat ?? true
+            else {
                 completion?(nil)
                 return
             }
@@ -327,7 +331,7 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
 
     public func updateLastCommonReadMessage(_ messageId: Int, forRoom room: NCRoom) {
         self.updateRoom(room) { managedRoom in
-            if messageId > managedRoom.lastCommonReadMessage {
+            if messageId != managedRoom.lastCommonReadMessage {
                 managedRoom.lastCommonReadMessage = messageId
             }
         }
@@ -497,6 +501,9 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
             }
             self.pendingPrivateReplyInternalId = nil
 
+            self.chatViewController?.presentFailedShareOnAppear = pendingFailedShareJobId
+            self.pendingFailedShareJobId = nil
+
             if let chatViewController = self.chatViewController {
                 NCUserInterfaceController.sharedInstance().present(chatViewController)
             }
@@ -517,6 +524,11 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
                 self.chatViewController?.presentPrivateReply(withInternalId: pendingPrivateReplyInternalId)
             }
             self.pendingPrivateReplyInternalId = nil
+
+            if let pendingFailedShareJobId {
+                self.chatViewController?.presentFailedShare(ofJobId: pendingFailedShareJobId)
+            }
+            self.pendingFailedShareJobId = nil
         }
     }
 
@@ -892,6 +904,9 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
               let roomToken = notification.userInfo?[stringForKey: "roomToken"]
         else { return }
 
+        // Files that could not be shared in the background are offered again in the chat
+        self.pendingFailedShareJobId = notification.userInfo?[stringForKey: "failedUploadJobId"]
+
         self.checkForAccountChange(accountId)
         self.startChat(withRoomToken: roomToken)
 
@@ -1221,28 +1236,26 @@ class NCRoomsManager: NSObject, CallViewControllerDelegate {
             self.joinRoomTask?.cancel()
         }
 
-        let activeAccount = NCDatabaseManager.sharedInstance().activeAccount()
-
         // Remove room controller and exit room
         if let roomController = self.activeRooms[token], !roomController.inCall, !roomController.inChat {
 
             self.activeRooms.removeValue(forKey: token)
 
             self.leavingRoomToken = token
-            self.leaveRoomTask = NCAPIController.sharedInstance().exitRoom(token, forAccount: activeAccount, completionBlock: { error in
+            self.leaveRoomTask = NCAPIController.sharedInstance().exitRoom(token, forAccount: account, completionBlock: { error in
                 var userInfo = [:]
                 userInfo["token"] = token
 
                 self.leaveRoomTask = nil
                 self.leavingRoomToken = nil
 
-                if let extSignalingController = NCSettingsController.sharedInstance().externalSignalingController(forAccountId: activeAccount.accountId) {
+                if let extSignalingController = NCSettingsController.sharedInstance().externalSignalingController(forAccountId: account.accountId) {
                     extSignalingController.leaveRoom(withRoomId: token)
                 }
 
                 if let error {
                     userInfo["error"] = error
-                    NCLog.log("Could not exit room. Error: \(error.localizedDescription)")
+                    NCLog.log("Could not exit room. Status: \(error.responseStatusCode) Error: \(error.localizedDescription)")
                 } else {
                     self.checkForPendingToStartCalls()
                 }

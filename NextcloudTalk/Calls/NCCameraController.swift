@@ -31,6 +31,10 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     // AVFoundation
     private var session: AVCaptureSession?
+    // Configuration on the concurrent global queue let two switchCamera calls interleave remove and add
+    private let sessionQueue = DispatchQueue(label: "talk.camera.session", qos: .userInitiated)
+    // Only accessed on sessionQueue
+    private var captureEnabled: Bool
 
     // WebRTC
     private var videoSource: RTCVideoSource
@@ -59,12 +63,14 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     // Core image
     private var context: CIContext!
     private var lastImage: CIImage?
+    private let previewColorSpace = CGColorSpaceCreateDeviceRGB()
 
     // MARK: - Init
 
-    init(videoSource: RTCVideoSource, videoCapturer: RTCVideoCapturer) {
+    init(videoSource: RTCVideoSource, videoCapturer: RTCVideoCapturer, captureEnabled: Bool) {
         self.videoSource = videoSource
         self.videoCapturer = videoCapturer
+        self.captureEnabled = captureEnabled
 
         super.init()
 
@@ -98,26 +104,34 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     }
 
     func switchCamera() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        sessionQueue.async { [weak self] in
+            guard let self, let session = self.session else { return }
 
-            if let firstInput = session?.inputs.first {
-                session?.removeInput(firstInput)
+            let oldInput = session.inputs.first
+            guard let newInput = self.usingFrontCamera ? self.getBackCameraInput() : self.getFrontCameraInput() else { return }
+
+            if let oldInput {
+                session.removeInput(oldInput)
             }
 
             // Stop and restart the session to prevent a weird glitch when rotating our local view
-            self.session?.stopRunning()
+            session.stopRunning()
 
-            if let newInput = self.usingFrontCamera ? self.getBackCameraInput() : self.getFrontCameraInput() {
-                self.session?.addInput(newInput)
+            // addInput raises when the session refuses the input, keep the old camera in that case
+            if session.canAddInput(newInput) {
+                session.addInput(newInput)
+                self.usingFrontCamera.toggle()
+            } else if let oldInput, session.canAddInput(oldInput) {
+                session.addInput(oldInput)
             }
 
             // We need to set the orientation again, because otherweise after switching the video is turned
-            self.session?.outputs.first?.connections.first?.videoOrientation = .portrait
-            self.session?.startRunning()
+            session.outputs.first?.connections.first?.videoOrientation = .portrait
 
-            // Toggle usingFrontCamera flag and update video rotation
-            self.usingFrontCamera.toggle()
+            if self.captureEnabled {
+                session.startRunning()
+            }
+
             self.updateVideoRotationBasedOnDeviceOrientation()
         }
     }
@@ -205,7 +219,7 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     }
 
     func initAVCaptureSession() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        sessionQueue.async { [weak self] in
             guard let self = self else { return }
             self.session = AVCaptureSession()
 
@@ -227,12 +241,30 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
             self.session?.addOutput(output)
             output.connections.first?.videoOrientation = .portrait
-            self.session?.startRunning()
+
+            if self.captureEnabled {
+                self.session?.startRunning()
+            }
         }
     }
 
     public func stopAVCaptureSession() {
         self.session?.stopRunning()
+    }
+
+    // A disabled video track still gets every camera frame, draws the hidden preview and encodes black frames
+    public func setCaptureEnabled(_ enabled: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self, self.captureEnabled != enabled else { return }
+
+            self.captureEnabled = enabled
+
+            if enabled {
+                self.session?.startRunning()
+            } else {
+                self.session?.stopRunning()
+            }
+        }
     }
 
     public func isMultitaskingCameraAccessEnabled() -> Bool {
@@ -306,6 +338,15 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             }
         }
 
+        // Sent before drawing the preview, because waiting for a drawable can block this queue
+        let timeStampNs =  CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * Float64(NSEC_PER_SEC)
+        let rtcpixelBuffer = RTCCVPixelBuffer(pixelBuffer: pixelBuffer)
+        let videoFrame: RTCVideoFrame? = RTCVideoFrame(buffer: rtcpixelBuffer, rotation: videoRotation, timeStampNs: Int64(timeStampNs))
+
+        if let videoFrame = videoFrame {
+            self.videoSource.capturer(self.videoCapturer, didCapture: videoFrame)
+        }
+
         self.lastImage = frameImage
 
         if let localView {
@@ -315,15 +356,6 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
                 self.delegate?.didDrawFirstFrameOnLocalView()
                 self.firstLocalViewFrameDrawn = true
             }
-        }
-
-        // Create the RTCVideoFrame
-        let timeStampNs =  CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * Float64(NSEC_PER_SEC)
-        let rtcpixelBuffer = RTCCVPixelBuffer(pixelBuffer: pixelBuffer)
-        let videoFrame: RTCVideoFrame? = RTCVideoFrame(buffer: rtcpixelBuffer, rotation: videoRotation, timeStampNs: Int64(timeStampNs))
-
-        if let videoFrame = videoFrame {
-            self.videoSource.capturer(self.videoCapturer, didCapture: videoFrame)
         }
     }
 
@@ -395,7 +427,7 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
                               to: currentDrawable.texture,
                               commandBuffer: commandBuffer,
                               bounds: newImage.extent,
-                              colorSpace: CGColorSpaceCreateDeviceRGB())
+                              colorSpace: previewColorSpace)
 
         // register drawwable to command buffer
         commandBuffer.present(currentDrawable)
@@ -428,8 +460,8 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
         // The session should resume on its own when the interruption ended,
         // but make sure it is really running again
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let session = self?.session, !session.isRunning else { return }
+        self.sessionQueue.async { [weak self] in
+            guard let self, self.captureEnabled, let session = self.session, !session.isRunning else { return }
 
             session.startRunning()
         }
@@ -444,8 +476,10 @@ class NCCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         print("Capture session runtime error: \(String(describing: error))")
 
         // Try to restart the session after a runtime error
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.session?.startRunning()
+        self.sessionQueue.async { [weak self] in
+            guard let self, self.captureEnabled else { return }
+
+            self.session?.startRunning()
         }
     }
 
