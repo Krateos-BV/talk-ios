@@ -28,7 +28,9 @@ NSString * const bundleIdentifier = @"eu.xeniacloud.talk";
 NSString * const groupIdentifier = @"group.eu.xeniacloud.talk";
 NSString * const appsGroupIdentifier = @"group.eu.xeniacloud.apps";
 NSString * const pushNotificationServer = @"https://push-notifications.nextcloud.com";
-NSString * const privacyURL = @"https://xeniacloud.eu/privacy-policy/";
+// The final URL, not /privacy-policy/: that one answers 301 to this page, and the locked privacy web view
+// (XeniaWebNavigationPolicy.singlePage) does not follow redirects, so it stayed blank (XEN-381).
+NSString * const privacyURL = @"https://xeniacloud.eu/privacy-statement-eu/";
 BOOL const isBrandedApp = YES;
 BOOL const multiAccountEnabled = YES;
 BOOL const useAppsGroup = YES;

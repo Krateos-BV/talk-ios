@@ -19,14 +19,23 @@ final class UnitXeniaWebNavigationPolicyTest: XCTestCase {
         XCTAssertEqual(try url(privacyURL).scheme, "https")
     }
 
+    /// The single-page policy does not follow redirects, so privacyURL must be the final URL.
+    /// https://xeniacloud.eu/privacy-policy/ answers 301 to /privacy-statement-eu/, which left the page blank on iPad (XEN-381).
+    func testPrivacyURLIsTheFinalStatementURL() throws {
+        let privacy = try url(privacyURL)
+
+        XCTAssertEqual(privacy.host, "xeniacloud.eu")
+        XCTAssertEqual(privacy.path, "/privacy-statement-eu")
+    }
+
     func testPrivacyAllowsTheStatementItself() throws {
         let policy = XeniaWebNavigationPolicy.singlePage(url: try url(privacyURL))
 
         for string in [
-            "https://xeniacloud.eu/privacy-policy/",
-            "https://xeniacloud.eu/privacy-policy",
-            "https://XeniaCloud.eu/privacy-policy/#cookies",
-            "https://xeniacloud.eu/privacy-policy/?lang=en"
+            "https://xeniacloud.eu/privacy-statement-eu/",
+            "https://xeniacloud.eu/privacy-statement-eu",
+            "https://XeniaCloud.eu/privacy-statement-eu/#cookies",
+            "https://xeniacloud.eu/privacy-statement-eu/?lang=en"
         ] {
             XCTAssertTrue(policy.allows(try url(string), isMainFrame: true), string)
         }
@@ -41,8 +50,9 @@ final class UnitXeniaWebNavigationPolicyTest: XCTestCase {
             "https://xeniacloud.eu/#business-pricing",
             "https://xeniacloud.eu/pricing-en/",
             "https://auth.xeniacloud.eu/if/flow/enrollment/",
-            "https://portal.xeniacloud.eu/privacy-policy/",
-            "http://xeniacloud.eu/privacy-policy/",
+            "https://portal.xeniacloud.eu/privacy-statement-eu/",
+            "http://xeniacloud.eu/privacy-statement-eu/",
+            "https://xeniacloud.eu/privacy-policy/",
             "mailto:privacy@example.com"
         ] {
             XCTAssertFalse(policy.allows(try url(string), isMainFrame: true), string)
