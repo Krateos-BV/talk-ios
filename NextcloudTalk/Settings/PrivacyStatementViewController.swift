@@ -13,12 +13,39 @@ import WebKit
 /// website, whose header and footer link to plans and sign-up (Guideline 3.1.1, XEN-381).
 /// Anchors within the page keep working.
 ///
+/// The site's header (menu with "Start Free", "Pricing" and "Sign in"), footer (pricing and other links)
+/// and cookie consent UI are hidden, so only the statement itself is shown. If the website renames these
+/// elements they reappear, but stay inert because of the navigation policy.
+///
 class PrivacyStatementViewController: UIViewController, WKNavigationDelegate {
 
     let url: URL
     let navigationPolicy: XeniaWebNavigationPolicy
 
     private(set) var webView: WKWebView?
+
+    /// Selectors of the website (xeniacloud.eu, WordPress with Complianz) that are not part of the statement.
+    static let hiddenSiteSelectors: [String] = [
+        "#site-header",
+        "#site-footer",
+        "#xenia-footer",
+        ".cmplz-cookiebanner",
+        ".cmplz-manage-consent",
+        ".cmplz-soft-cookiewall"
+    ]
+
+    /// Injected at document start, so the hidden elements never flash on screen.
+    static var hideSiteChromeScript: String {
+        let css = hiddenSiteSelectors.joined(separator: ", ") + " { display: none !important; }"
+
+        return """
+        (function() {
+            var style = document.createElement('style');
+            style.textContent = '\(css)';
+            (document.head || document.documentElement).appendChild(style);
+        })();
+        """
+    }
 
     init(url: URL) {
         self.url = url
@@ -39,6 +66,7 @@ class PrivacyStatementViewController: UIViewController, WKNavigationDelegate {
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.addUserScript(WKUserScript(source: Self.hideSiteChromeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let webView = WKWebView(frame: self.view.bounds, configuration: configuration)
         webView.navigationDelegate = self

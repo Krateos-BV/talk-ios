@@ -128,4 +128,22 @@ final class UnitXeniaWebNavigationPolicyTest: XCTestCase {
         XCTAssertTrue(viewController.responds(to: NSSelectorFromString("webView:decidePolicyForNavigationAction:decisionHandler:")))
         XCTAssertEqual(viewController.navigationPolicy.rule, XeniaWebNavigationPolicy.singlePage(url: try url(privacyURL)).rule)
     }
+
+    @MainActor
+    func testPrivacyViewControllerHidesSiteChrome() throws {
+        let script = PrivacyStatementViewController.hideSiteChromeScript
+
+        for selector in ["#site-header", "#site-footer", "#xenia-footer", ".cmplz-cookiebanner", ".cmplz-manage-consent"] {
+            XCTAssertTrue(script.contains(selector), selector)
+        }
+
+        XCTAssertTrue(script.contains("display: none !important"))
+        XCTAssertFalse(script.contains("#cmplz-document"), "The statement itself must stay visible")
+
+        let viewController = PrivacyStatementViewController(url: try url(privacyURL))
+        viewController.loadViewIfNeeded()
+
+        let scripts = try XCTUnwrap(viewController.webView?.configuration.userContentController.userScripts)
+        XCTAssertTrue(scripts.contains { $0.source == script && $0.injectionTime == .atDocumentStart })
+    }
 }
