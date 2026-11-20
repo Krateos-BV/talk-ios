@@ -2487,7 +2487,7 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NextcloudTalkTests;
@@ -2531,7 +2531,7 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NextcloudTalkTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2569,7 +2569,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.TalkIntents;
@@ -2610,7 +2610,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.TalkIntents;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2637,7 +2637,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NextcloudTalkUITests;
@@ -2666,7 +2666,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NextcloudTalkUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2710,7 +2710,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.BroadcastUploadExtension;
@@ -2753,7 +2753,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.BroadcastUploadExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2916,7 +2916,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2960,7 +2960,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -3045,7 +3045,7 @@
 					"\"${PODS_CONFIGURATION_BUILD_DIR}/UICKeyChainStore\"",
 					"\"${PODS_ROOT}/Realm/core\"",
 				);
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.ShareExtension;
@@ -3134,7 +3134,7 @@
 					"\"${PODS_CONFIGURATION_BUILD_DIR}/UICKeyChainStore\"",
 					"\"${PODS_ROOT}/Realm/core\"",
 				);
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.ShareExtension;
 				PRODUCT_NAME = ShareExtension;
@@ -3205,7 +3205,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NotificationServiceExtension;
@@ -3275,7 +3275,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 26.9.19;
+				MARKETING_VERSION = 26.11.20;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.xeniacloud.talk.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
