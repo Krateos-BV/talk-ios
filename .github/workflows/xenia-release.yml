@@ -152,39 +152,14 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
-      - name: Archive (signed, automatic signing via ASC API key)
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -o pipefail && \
-          xcodebuild archive \
-            -workspace "${{ env.WORKSPACE }}" \
-            -scheme "${{ env.SCHEME }}" \
-            -archivePath "${{ env.ARCHIVE_PATH }}" \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath 'DerivedData' \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
-            | xcbeautify --quieter
-
       # --- Manually-created App Store distribution profiles.
       #
-      # Cloud Managed Signing can create a Development-type profile via the
-      # ASC API key (that's what Archive above uses), but cannot create a
-      # genuine "iOS App Store" distribution profile that way -- every
-      # attempt at automatic export signing failed with "Cloud signing
-      # permission error", regardless of certificate validity or quota.
-      # These 5 App Store profiles were created manually in the portal
-      # (a one-time, human action) and are installed here so Export can
-      # reference them explicitly instead of asking Apple to create one on
-      # the fly.
+      # Cloud Managed Signing cannot create a genuine "iOS App Store"
+      # distribution profile via the ASC API key -- every attempt at
+      # automatic export signing failed with "Cloud signing permission
+      # error". These 5 App Store profiles were created manually in the
+      # portal (a one-time, human action) and are installed here, before
+      # Archive, so both Archive and Export use them explicitly.
       - name: Install App Store provisioning profiles
         env:
           APPLE_PROFILE_TALK: ${{ secrets.APPLE_PROFILE_TALK }}
@@ -215,6 +190,33 @@ jobs:
           install_profile "Xenia Talk BroadcastUploadExtension App Store" "$APPLE_PROFILE_TALK_BROADCASTUPLOAD"
           install_profile "Xenia Talk ShareExtension App Store" "$APPLE_PROFILE_TALK_SHARE"
           install_profile "Xenia Talk NotificationServiceExtension App Store" "$APPLE_PROFILE_TALK_NOTIFICATIONSERVICE"
+
+      # Archive with manual signing: the Distribution certificate imported
+      # above plus the App Store profiles installed above. Automatic signing
+      # made Xcode create a new Apple Development certificate on every fresh
+      # runner until the team hit Apple's certificate limit ("Your account
+      # has reached the maximum number of certificates", run 44792903681,
+      # XEN-381). files-ios moved to manual archive signing for the same
+      # reason. The switch is applied to the runner's checkout only, so the
+      # committed project keeps automatic signing for Debug and local builds.
+      - name: Use manual App Store signing for the Release configuration
+        run: python3 scripts/xenia_release_signing.py NextcloudTalk.xcodeproj/project.pbxproj
+
+      - name: Archive (signed, manual signing with Distribution cert + App Store profiles)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail && \
+          xcodebuild archive \
+            -workspace "${{ env.WORKSPACE }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Release \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath 'DerivedData' \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            | xcbeautify --quieter
 
       - name: Write ExportOptions.plist
         env:
